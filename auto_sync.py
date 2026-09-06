@@ -71,6 +71,13 @@ def auto_sync():
     log("Every file update will be automatically committed & pushed to GitHub.")
     log("=" * 65)
 
+    _, cur_commit, _ = run_cmd("git rev-parse --short HEAD")
+    update_deployment_status("LIVE_ON_GITHUB", {
+        "commit": cur_commit or "INITIAL",
+        "message": "Stable version running.",
+        "pushedAt": datetime.now().isoformat()
+    })
+
     last_change_time = None
     last_snapshot = []
     pending_sync = False
@@ -84,6 +91,11 @@ def auto_sync():
                     pending_sync = True
                     last_change_time = time.time()
                     last_snapshot = status_lines
+                    update_deployment_status("UPDATING", {
+                        "activeCommit": cur_commit,
+                        "message": "Update in progress. Current app running on previous stable version.",
+                        "fileCount": len(status_lines)
+                    })
                     log(f"[{datetime.now().strftime('%H:%M:%S')}] [DETECTED] Changes in {len(status_lines)} file(s). Settling {DEBOUNCE_SECONDS}s...")
                 elif status_lines != last_snapshot:
                     # User is still actively modifying files
@@ -127,8 +139,21 @@ def auto_sync():
                     p_code, p_out, p_err = run_cmd("git push origin main")
 
                     if p_code == 0:
+                        _, new_commit, _ = run_cmd("git rev-parse --short HEAD")
+                        cur_commit = new_commit or cur_commit
+                        update_deployment_status("LIVE_ON_GITHUB", {
+                            "commit": cur_commit,
+                            "commitMessage": commit_msg,
+                            "message": "Successfully deployed to GitHub main.",
+                            "pushedAt": datetime.now().isoformat()
+                        })
                         log(f"[{datetime.now().strftime('%H:%M:%S')}] [SUCCESS] Sync complete! Changes are live on GitHub.\n")
                     else:
+                        update_deployment_status("PUSH_FAILED", {
+                            "error": p_err or p_out,
+                            "activeCommit": cur_commit,
+                            "message": "Push failed, retrying. App running on previous stable version."
+                        })
                         log(f"[{datetime.now().strftime('%H:%M:%S')}] [WARN] Push failed (will retry): {p_err or p_out}\n")
 
                     pending_sync = False
