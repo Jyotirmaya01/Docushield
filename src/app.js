@@ -82,14 +82,19 @@ class DocuShieldApp {
   }
 
   async init() {
-    await AuthManager.initDatabase();
+    try {
+      await AuthManager.initDatabase();
+    } catch (e) {
+      console.warn('[DocuShield] Database initialization warning:', e);
+    }
+
     this.bindEvents();
     this.updateSyncUI();
     syncInstance.subscribe(() => this.updateSyncUI());
 
     const activeSession = AuthManager.getActiveSession();
     if (activeSession && activeSession.role === 'OFFICER') {
-      this.applyOfficerSession(activeSession);
+      this.applyOfficerSession(activeSession, activeSession.isDemo === true);
     }
 
     this.navigateTo('login');
@@ -101,8 +106,56 @@ class DocuShieldApp {
     });
   }
 
-  applyOfficerSession(officer) {
+  switchLoginTab(tab) {
+    const tabOfficer = document.getElementById('tab-btn-officer');
+    const tabAdmin = document.getElementById('tab-btn-admin');
+    const contentOfficer = document.getElementById('tab-content-officer');
+    const contentAdmin = document.getElementById('tab-content-admin');
+
+    if (tab === 'admin') {
+      if (tabAdmin) tabAdmin.className = 'py-2.5 rounded-lg bg-surface-container text-tertiary font-bold uppercase transition-all flex items-center justify-center gap-1.5 shadow-sm';
+      if (tabOfficer) tabOfficer.className = 'py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface font-semibold uppercase transition-all flex items-center justify-center gap-1.5';
+      contentAdmin?.classList.remove('hidden');
+      contentOfficer?.classList.add('hidden');
+    } else {
+      if (tabOfficer) tabOfficer.className = 'py-2.5 rounded-lg bg-surface-container text-primary font-bold uppercase transition-all flex items-center justify-center gap-1.5 shadow-sm';
+      if (tabAdmin) tabAdmin.className = 'py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface font-semibold uppercase transition-all flex items-center justify-center gap-1.5';
+      contentOfficer?.classList.remove('hidden');
+      contentAdmin?.classList.add('hidden');
+    }
+  }
+
+  async launchDemoMode() {
+    try {
+      const demoOfficer = await AuthManager.loginDemoMode();
+      this.applyOfficerSession(demoOfficer, true);
+      this.showToast('⚡ Demo Mode Active: Welcome Insp. Rameshwar Singh');
+      this.navigateTo('dashboard');
+    } catch (err) {
+      console.error('Demo mode launch error:', err);
+      this.showToast('Failed to start demo mode. Please try again.');
+    }
+  }
+
+  logoutOfficer() {
+    AuthManager.logout();
+    this.showToast('Officer session logged out.');
+    this.navigateTo('login');
+  }
+
+  openAdminConsole() {
+    const session = AuthManager.getActiveSession();
+    if (session && session.role === 'ADMIN') {
+      this.navigateTo('admin');
+    } else {
+      this.navigateTo('login');
+      this.switchLoginTab('admin');
+    }
+  }
+
+  applyOfficerSession(officer, isDemo = false) {
     if (!officer) return;
+    const isDemoMode = isDemo || officer.isDemo === true;
     CONFIG.OFFICER.name = officer.fullName;
     CONFIG.OFFICER.id = officer.id;
     CONFIG.OFFICER.rank = officer.rank;
@@ -113,15 +166,83 @@ class DocuShieldApp {
 
     // Header badge
     const headerBadge = document.getElementById('header-officer-badge');
-    if (headerBadge) headerBadge.textContent = initials;
+    if (headerBadge) {
+      headerBadge.textContent = initials;
+      headerBadge.title = isDemoMode ? 'Demo Inspector (Sandbox)' : `${officer.fullName} (${officer.id})`;
+    }
 
-    // Dashboard card
+    // Dashboard card elements
     const dashName = document.getElementById('dash-officer-name');
     const dashMeta = document.getElementById('dash-officer-meta');
     const dashStation = document.getElementById('dash-officer-checkpoint');
-    if (dashName) dashName.innerHTML = `${officer.fullName} <span class="text-on-surface-variant font-normal text-sm">(SSB)</span>`;
-    if (dashMeta) dashMeta.innerHTML = `<span>Shift: ${officer.shift || '06:00 - 14:00'}</span><span>•</span><span>ID: ${officer.id}</span>`;
-    if (dashStation && officer.checkpointName) dashStation.innerHTML = `<span class="material-symbols-outlined text-[14px]">location_on</span><span>${officer.checkpointName.toUpperCase()}</span>`;
+    const dashModeIndicator = document.getElementById('dash-mode-indicator');
+    const dashSessionBanner = document.getElementById('dash-session-banner');
+
+    if (isDemoMode) {
+      if (dashModeIndicator) {
+        dashModeIndicator.innerHTML = `
+          <span class="material-symbols-outlined text-tertiary text-[16px] animate-pulse">bolt</span>
+          <span class="font-mono text-[10px] uppercase text-tertiary font-bold">⚡ DEMO OFFICER DASHBOARD (SANDBOX)</span>
+        `;
+      }
+      if (dashStation) {
+        dashStation.innerHTML = `<span class="material-symbols-outlined text-[14px] text-tertiary">science</span><span class="text-tertiary font-bold">DEMO CHECKPOINT CP-04 (PANITANKI TERMINAL - SANDBOX)</span>`;
+      }
+      if (dashName) {
+        dashName.innerHTML = `Insp. Rameshwar Singh <span class="text-tertiary font-mono text-xs px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 uppercase font-bold">DEMO PREVIEW</span>`;
+      }
+      if (dashMeta) {
+        dashMeta.innerHTML = `<span>Shift: 06:00 - 14:00 (Alpha)</span><span>•</span><span>ID: SSB-7489-N</span><span>•</span><span class="text-secondary font-semibold">Demo Sandbox Active</span>`;
+      }
+      if (dashSessionBanner) {
+        dashSessionBanner.className = 'w-full px-3 py-2 rounded-xl bg-gradient-to-r from-tertiary/20 via-primary/10 to-tertiary/20 border border-tertiary/40 flex items-center justify-between font-mono text-xs text-tertiary mb-2 shadow-sm';
+        dashSessionBanner.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[18px] text-tertiary animate-pulse">bolt</span>
+            <div>
+              <span class="font-bold">⚡ DEMO OFFICER DASHBOARD</span>
+              <span class="text-[10px] text-on-surface-variant block sm:inline sm:ml-2">All document screening &amp; forensic tools working in interactive sandbox mode.</span>
+            </div>
+          </div>
+          <button type="button" onclick="window.app.navigateTo('login')" class="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-[10px] text-on-surface hover:text-primary font-bold transition-all flex-shrink-0 border border-outline/20">
+            Exit Demo
+          </button>
+        `;
+        dashSessionBanner.classList.remove('hidden');
+      }
+    } else {
+      if (dashModeIndicator) {
+        dashModeIndicator.innerHTML = `
+          <span class="material-symbols-outlined text-secondary text-[16px]">verified_user</span>
+          <span class="font-mono text-[10px] uppercase text-secondary font-bold">VERIFIED BORDER TERMINAL (AUTHENTICATED)</span>
+        `;
+      }
+      if (dashStation) {
+        dashStation.innerHTML = `<span class="material-symbols-outlined text-[14px]">location_on</span><span>${(officer.checkpointName || 'CHECKPOINT CP-04 · INDO-NEPAL').toUpperCase()}</span>`;
+      }
+      if (dashName) {
+        dashName.innerHTML = `${officer.fullName} <span class="text-secondary font-mono text-xs px-2 py-0.5 rounded bg-secondary/15 border border-secondary/30 uppercase font-bold">${officer.badgeNumber || 'SSB'}</span>`;
+      }
+      if (dashMeta) {
+        dashMeta.innerHTML = `<span>Shift: ${officer.shift || '06:00 - 14:00'}</span><span>•</span><span>ID: ${officer.id}</span><span>•</span><span>Rank: ${officer.rank || 'Inspector'}</span>`;
+      }
+      if (dashSessionBanner) {
+        dashSessionBanner.className = 'w-full px-3 py-2 rounded-xl bg-secondary/10 border border-secondary/30 flex items-center justify-between font-mono text-xs text-secondary mb-2 shadow-sm';
+        dashSessionBanner.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[18px] text-secondary">verified</span>
+            <div>
+              <span class="font-bold">OFFICER TERMINAL: ${officer.id}</span>
+              <span class="text-[10px] text-on-surface-variant block sm:inline sm:ml-2">Authenticated Border Verification Console.</span>
+            </div>
+          </div>
+          <button type="button" onclick="window.app.logoutOfficer()" class="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-error/20 text-[10px] text-error font-bold transition-all flex-shrink-0 border border-outline/20">
+            Log Out
+          </button>
+        `;
+        dashSessionBanner.classList.remove('hidden');
+      }
+    }
 
     // Profile card
     const profileAvatar = document.getElementById('profile-officer-avatar');
@@ -129,7 +250,7 @@ class DocuShieldApp {
     const profileRankId = document.getElementById('profile-officer-rank-id');
     const profileStation = document.getElementById('profile-officer-station');
     if (profileAvatar) profileAvatar.textContent = initials;
-    if (profileName) profileName.textContent = officer.fullName;
+    if (profileName) profileName.textContent = isDemoMode ? `${officer.fullName} (Demo)` : officer.fullName;
     if (profileRankId) profileRankId.textContent = `${officer.id} · ${officer.rank}`;
     if (profileStation) profileStation.textContent = `${officer.checkpointName || 'Panitanki Border CP-04'} (${officer.shift || 'Alpha Shift'})`;
   }
