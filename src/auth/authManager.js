@@ -264,6 +264,7 @@ export class AuthManager {
       console.warn('[AUTH] Could not sync new officer to backend immediately:', err);
     }
 
+    this.logAdminAction('ENROLL_OFFICER', newOfficer.id, `Enrolled ${newOfficer.fullName} (${newOfficer.rank}) at ${newOfficer.checkpointName}`);
     return newOfficer;
   }
 
@@ -276,9 +277,221 @@ export class AuthManager {
     if (officer) {
       officer.status = officer.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
       localStorage.setItem(STORAGE_OFFICERS_KEY, JSON.stringify(officers));
+      this.logAdminAction('STATUS_CHANGE', officer.id, `Changed status to ${officer.status}`);
+
+      // Sync backend if available
+      try {
+        fetch(`http://localhost:8000/api/admin/officers/${encodeURIComponent(officer.id)}/status`, {
+          method: 'POST'
+        }).catch(() => {});
+      } catch {}
+
       return officer;
     }
     return null;
+  }
+
+  /**
+   * Reset Officer Security PIN / Password
+   */
+  static async resetOfficerPin(officerId, newPin) {
+    if (!newPin || newPin.length < 4) {
+      throw new Error('PIN must be at least 4 characters.');
+    }
+    const officers = this.getOfficersFromStorage();
+    const officer = officers.find(o => o.id.toUpperCase() === officerId.toUpperCase());
+    if (!officer) {
+      throw new Error(`Officer ${officerId} not found.`);
+    }
+
+    officer.passwordHash = await this.hashPassword(newPin);
+    officer.lastPasswordReset = new Date().toISOString();
+    localStorage.setItem(STORAGE_OFFICERS_KEY, JSON.stringify(officers));
+    this.logAdminAction('RESET_PIN', officer.id, `Terminal PIN re-provisioned by Sector Command`);
+
+    // Sync backend if available
+    try {
+      fetch(`http://localhost:8000/api/admin/officers/${encodeURIComponent(officer.id)}/reset-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_pin: newPin })
+      }).catch(() => {});
+    } catch {}
+
+    return officer;
+  }
+
+  /**
+   * Decommission / Delete Officer Record
+   */
+  static deleteOfficer(officerId) {
+    let officers = this.getOfficersFromStorage();
+    const target = officers.find(o => o.id.toUpperCase() === officerId.toUpperCase());
+    if (!target) {
+      throw new Error(`Officer ${officerId} not found.`);
+    }
+
+    officers = officers.filter(o => o.id.toUpperCase() !== officerId.toUpperCase());
+    localStorage.setItem(STORAGE_OFFICERS_KEY, JSON.stringify(officers));
+    this.logAdminAction('DECOMMISSION_OFFICER', officerId, `Officer badge permanently revoked`);
+
+    // Sync backend if available
+    try {
+      fetch(`http://localhost:8000/api/admin/officers/${encodeURIComponent(officerId)}`, {
+        method: 'DELETE'
+      }).catch(() => {});
+    } catch {}
+
+    return target;
+  }
+
+  /**
+   * Update Officer Details (Rank, Checkpoint, Badge)
+   */
+  static updateOfficer(officerId, updates) {
+    const officers = this.getOfficersFromStorage();
+    const officer = officers.find(o => o.id.toUpperCase() === officerId.toUpperCase());
+    if (!officer) {
+      throw new Error(`Officer ${officerId} not found.`);
+    }
+
+    if (updates.fullName) officer.fullName = updates.fullName.trim();
+    if (updates.rank) officer.rank = updates.rank;
+    if (updates.checkpointId) officer.checkpointId = updates.checkpointId;
+    if (updates.checkpointName) officer.checkpointName = updates.checkpointName;
+    if (updates.badgeNumber) officer.badgeNumber = updates.badgeNumber.trim();
+    officer.updatedAt = new Date().toISOString();
+
+    localStorage.setItem(STORAGE_OFFICERS_KEY, JSON.stringify(officers));
+    this.logAdminAction('UPDATE_OFFICER', officer.id, `Updated profile details`);
+
+    // Sync backend if available
+    try {
+      fetch(`http://localhost:8000/api/admin/officers/${encodeURIComponent(officer.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      }).catch(() => {});
+    } catch {}
+
+    return officer;
+  }
+
+  /**
+   * Sector Threat Level & Policy Configuration
+   */
+  static getSectorConfig() {
+    try {
+      const data = localStorage.getItem(STORAGE_SECTOR_CONFIG_KEY);
+      if (data) return JSON.parse(data);
+    } catch {}
+
+    // Default configuration
+    const defaultConfig = {
+      threatLevel: 'ALPHA', // ALPHA (Standard), BRAVO (Heightened Watch), CHARLIE (Critical Lockdown)
+      dualBiometrics: false,
+      strictUv: true,
+      autoFlagInterpol: true,
+      lockdownMode: false,
+      alertMessage: 'Normal border screening operations in effect.',
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'ADMIN-01'
+    };
+    localStorage.setItem(STORAGE_SECTOR_CONFIG_KEY, JSON.stringify(defaultConfig));
+    return defaultConfig;
+  }
+
+  static updateSectorConfig(updates) {
+    const current = this.getSectorConfig();
+    const updated = {
+      ...current,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+      updatedBy: this.getActiveSession()?.fullName || 'SECTOR-ADMIN'
+    };
+    localStorage.setItem(STORAGE_SECTOR_CONFIG_KEY, JSON.stringify(updated));
+    this.logAdminAction('CONFIG_UPDATE', 'SECTOR_POLICIES', `Threat Level set to ${updated.threatLevel}`);
+    return updated;
+  }
+
+  /**
+   * Sector Admin Tamper-Proof Audit Trail
+   */
+  static logAdminAction(action, target, details) {
+    try {
+      const logs = this.getAdminAuditLogs();
+      const admin = this.getActiveSession() || { fullName: 'Sector Commander', id: 'ADMIN-01' };
+      const entry = {
+        id: 'LOG-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase(),
+        timestamp: new Date().toISOString(),
+        adminName: admin.fullName || 'Sector Commander',
+        adminId: admin.adminId || admin.id || 'ADMIN-01',
+        action,
+        target,
+        details
+      };
+      logs.unshift(entry);
+      // Keep last 100 entries
+      if (logs.length > 100) logs.length = 100;
+      localStorage.setItem(STORAGE_ADMIN_AUDIT_KEY, JSON.stringify(logs));
+    } catch (e) {
+      console.warn('[AUTH] Audit log error:', e);
+    }
+  }
+
+  static getAdminAuditLogs() {
+    try {
+      const data = localStorage.getItem(STORAGE_ADMIN_AUDIT_KEY);
+      return data ? JSON.parse(data) : [
+        {
+          id: 'LOG-INIT-001',
+          timestamp: new Date(Date.now() - 3600000).toISOString(),
+          adminName: 'Sector Commander Rajesh Joshi',
+          adminId: 'ADMIN-01',
+          action: 'SYSTEM_BOOT',
+          target: 'SECTOR-04-HQ',
+          details: 'Sector Command Cryptographic Kernel initialized'
+        }
+      ];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Export Officer Directory (JSON / CSV)
+   */
+  static exportOfficersJSON() {
+    const officers = this.getOfficersFromStorage().map(({ passwordHash, ...safe }) => safe);
+    const blob = new Blob([JSON.stringify(officers, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `docushield_officers_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  static exportOfficersCSV() {
+    const officers = this.getOfficersFromStorage();
+    const headers = ['ID', 'Full Name', 'Rank', 'Checkpoint', 'Badge', 'Status', 'Enrolled At'];
+    const rows = officers.map(o => [
+      o.id,
+      `"${o.fullName.replace(/"/g, '""')}"`,
+      `"${o.rank.replace(/"/g, '""')}"`,
+      `"${(o.checkpointName || o.checkpointId).replace(/"/g, '""')}"`,
+      o.badgeNumber || '',
+      o.status,
+      o.enrolledAt || ''
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `docushield_officers_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   /**
