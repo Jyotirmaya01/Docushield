@@ -361,6 +361,41 @@ async def change_officer_status(officer_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/admin/officers/{officer_id}/reset-pin")
+async def admin_reset_pin(officer_id: str, request: Request):
+    """Admin endpoint: Reset terminal PIN for an officer."""
+    try:
+        body = await request.json()
+        new_pin = body.get("new_pin", "")
+        if not new_pin or len(new_pin.strip()) < 4:
+            raise HTTPException(status_code=400, detail="PIN must be at least 4 characters.")
+        res = reset_officer_password(officer_id, new_pin.strip())
+        return serialize_response({"status": "success", "result": res})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/admin/officers/{officer_id}")
+async def admin_delete_officer(officer_id: str):
+    """Admin endpoint: Decommission and remove an officer."""
+    try:
+        res = delete_officer(officer_id)
+        return serialize_response({"status": "success", "result": res})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/admin/officers/{officer_id}")
+async def admin_update_officer(officer_id: str, request: Request):
+    """Admin endpoint: Update officer rank, checkpoint, or badge details."""
+    try:
+        body = await request.json()
+        res = update_officer(officer_id, body)
+        return serialize_response({"status": "success", "result": res})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================
 # Serve frontend static files (index.html, etc.)
 # ============================================================
