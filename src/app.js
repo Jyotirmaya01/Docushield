@@ -1447,33 +1447,7 @@ class DocuShieldApp {
     const officerErrorText = document.getElementById('officer-login-error-text');
     const officerLoginBtn = document.getElementById('btn-officer-login');
 
-    officerForm?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      officerError?.classList.add('hidden');
-      const officerId = document.getElementById('login-officer-id')?.value.trim();
-      const password = document.getElementById('login-officer-password')?.value;
-
-      if (officerLoginBtn) {
-        officerLoginBtn.disabled = true;
-        officerLoginBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Verifying Credentials...</span>';
-      }
-
-      const res = await AuthManager.loginOfficer(officerId, password);
-
-      if (officerLoginBtn) {
-        officerLoginBtn.disabled = false;
-        officerLoginBtn.innerHTML = '<span>Authenticate &amp; Open Console</span><span class="material-symbols-outlined text-[18px]">login</span>';
-      }
-
-      if (res.success) {
-        this.applyOfficerSession(res.officer, false);
-        this.showToast(`✅ Welcome, ${res.officer.fullName}`);
-        this.navigateTo('dashboard');
-      } else {
-        if (officerErrorText) officerErrorText.textContent = res.error;
-        officerError?.classList.remove('hidden');
-      }
-    });
+    officerForm?.addEventListener('submit', (e) => this.submitOfficerLogin(e));
 
     // --- ONE-CLICK DEMO ACCESS BUTTON ---
     const demoBtn = document.getElementById('btn-quick-demo');
