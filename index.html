@@ -1472,17 +1472,39 @@
     </div>
   </div>
 
-  <!-- PWA Service Worker Registration & Install Logic -->
+  <!-- ZERO-DOWNTIME LIVE VERSION UPDATE BANNER -->
+  <div id="live-version-banner" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-surface-container-highest/95 backdrop-blur-xl border border-secondary/50 rounded-2xl p-4 shadow-2xl flex items-center gap-3.5 transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px] max-w-lg w-[92%]">
+    <div class="w-11 h-11 rounded-xl bg-secondary/20 text-secondary flex items-center justify-center flex-shrink-0 border border-secondary/40 shadow-inner">
+      <span class="material-symbols-outlined text-[24px] animate-pulse">cloud_done</span>
+    </div>
+    <div class="flex flex-col flex-1">
+      <div class="flex items-center gap-2">
+        <span class="font-mono text-[10px] uppercase font-bold text-secondary">LIVE ON GITHUB</span>
+        <span id="live-commit-tag" class="text-[10px] font-mono px-2 py-0.5 rounded bg-surface border border-outline/30 text-primary font-bold">#LATEST</span>
+      </div>
+      <span class="text-xs font-bold text-on-surface mt-0.5">New Verified Version Ready</span>
+      <span class="text-[10px] text-on-surface-variant font-mono">App stayed online on previous version during deployment.</span>
+    </div>
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <button type="button" id="btn-apply-update" class="px-3.5 py-2 rounded-xl bg-secondary text-on-secondary font-mono text-xs font-bold uppercase shadow-md active:scale-95 transition-all hover:bg-secondary/90">
+        Switch Now
+      </button>
+      <button type="button" id="btn-dismiss-update" class="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-all">
+        <span class="material-symbols-outlined text-[18px]">close</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- PWA Service Worker Registration & Zero-Downtime Update Logic -->
   <script>
-    // Real-Time Service Worker Registration & Live Auto-Update
     let swRegistration = null;
-    let refreshing = false;
+    let newWorkerWaiting = null;
+    let userInitiatedReload = false;
 
     function showUpdateToast(msg) {
       const toast = document.getElementById('app-toast');
       if (!toast) return;
-      const toastText = toast.querySelector('.toast-text');
-      if (toastText) toastText.textContent = msg;
+      toast.textContent = msg;
       toast.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
       toast.classList.add('opacity-100', 'translate-y-0');
       setTimeout(() => {
@@ -1491,52 +1513,120 @@
       }, 3500);
     }
 
+    // Zero-Downtime Deployment Polling
+    async function checkDeploymentStatus() {
+      try {
+        const res = await fetch('./deployment_status.json?t=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        const activeCommit = localStorage.getItem('docushield_active_commit');
+        const syncBadges = document.querySelectorAll('.sync-state-badge');
+
+        if (data.status === 'UPDATING') {
+          // While updating, display that app is safely running previous version
+          syncBadges.forEach(badge => {
+            badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span><span class="font-mono text-[10px] text-tertiary uppercase font-semibold">SYNCING (PREV SAFE)</span>';
+          });
+        } else if (data.status === 'LIVE_ON_GITHUB' && data.commit) {
+          // Restore normal store & forward badge if no update banner
+          if (!activeCommit) {
+            localStorage.setItem('docushield_active_commit', data.commit);
+          } else if (activeCommit !== data.commit) {
+            // New version verified and live on GitHub!
+            showLiveVersionBanner(data.commit);
+          }
+        }
+      } catch (err) {
+        // Offline or unreachable — app continues running on cached version
+      }
+    }
+
+    function showLiveVersionBanner(commitHash) {
+      const banner = document.getElementById('live-version-banner');
+      const tag = document.getElementById('live-commit-tag');
+      if (!banner) return;
+      if (tag) tag.textContent = '#' + commitHash.slice(0, 7);
+
+      banner.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-[-20px]');
+      banner.classList.add('opacity-100', 'pointer-events-auto', 'translate-y-0');
+    }
+
+    function hideLiveVersionBanner() {
+      const banner = document.getElementById('live-version-banner');
+      if (!banner) return;
+      banner.classList.add('opacity-0', 'pointer-events-none', 'translate-y-[-20px]');
+      banner.classList.remove('opacity-100', 'pointer-events-auto', 'translate-y-0');
+    }
+
+    document.getElementById('btn-dismiss-update')?.addEventListener('click', () => {
+      hideLiveVersionBanner();
+    });
+
+    document.getElementById('btn-apply-update')?.addEventListener('click', () => {
+      userInitiatedReload = true;
+      showUpdateToast('⚡ Activating new verified release...');
+      
+      // Update saved commit
+      fetch('./deployment_status.json?t=' + Date.now()).then(r => r.json()).then(d => {
+        if (d && d.commit) localStorage.setItem('docushield_active_commit', d.commit);
+      }).catch(() => {});
+
+      // Post message to waiting service worker if available
+      if (newWorkerWaiting) {
+        newWorkerWaiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    });
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js').then((reg) => {
           swRegistration = reg;
-          console.log('DocuShield Service Worker active:', reg.scope);
+          console.log('DocuShield Service Worker active (zero-downtime mode):', reg.scope);
 
-          // If a new worker is already waiting, trigger update
           if (reg.waiting) {
-            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            newWorkerWaiting = reg.waiting;
           }
 
-          // Detect new service worker updates in real time
+          // Stage newly downloaded worker in background without abrupt reload
           reg.addEventListener('updatefound', () => {
-            const newWorker = reg.installing;
-            if (!newWorker) return;
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('⚡ Real-time update detected. Activating new version...');
-                newWorker.postMessage({ type: 'SKIP_WAITING' });
+            const installingWorker = reg.installing;
+            if (!installingWorker) return;
+            installingWorker.addEventListener('statechange', () => {
+              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                newWorkerWaiting = installingWorker;
+                console.log('📦 New version cached in background. Waiting for user switch or session idle.');
+                checkDeploymentStatus();
               }
             });
           });
 
-          // Check for updates every 30 seconds automatically
+          // Check deployment status and SW updates every 15 seconds
+          checkDeploymentStatus();
           setInterval(() => {
             reg.update().catch(() => {});
-          }, 30000);
+            checkDeploymentStatus();
+          }, 15000);
 
-          // Check for update whenever user focuses/returns to the app
           document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
               reg.update().catch(() => {});
+              checkDeploymentStatus();
             }
           });
         }).catch((err) => {
-          console.log('Service Worker registration skipped:', err);
+          console.log('Service Worker registration note:', err);
         });
 
-        // When the new worker takes control, refresh page seamlessly once
+        // Controller change listener — only reload if user explicitly asked for update
         navigator.serviceWorker.addEventListener('controllerchange', () => {
-          if (refreshing) return;
-          refreshing = true;
-          showUpdateToast('⚡ Real-Time Update Applied! Loading latest changes...');
-          setTimeout(() => {
+          if (userInitiatedReload) {
             window.location.reload();
-          }, 800);
+          }
         });
       });
     }
