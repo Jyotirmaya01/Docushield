@@ -93,12 +93,23 @@ def init_database():
         officer_pw_hash = hashlib.sha256("882194".encode()).hexdigest()
         admin_pw_hash = hashlib.sha256("admin".encode()).hexdigest()
 
-        # Seed default officer
-        cur.execute("""
-            INSERT INTO officers (officer_id, full_name, rank, checkpoint_id, badge_number, password_hash, status)
-            VALUES ('SSB-7489-N', 'Inspector Rameshwar Singh', 'Inspector / Screening Lead', 'CP-04-NORTH', 'SSB-VET-441', ?, 'ACTIVE')
-            ON CONFLICT (officer_id) DO UPDATE SET password_hash = excluded.password_hash
-        """, (officer_pw_hash,))
+        # Seed default officers
+        officers_to_seed = [
+            ('SSB-7489-N', 'Inspector Rameshwar Singh', 'Inspector / Screening Lead', 'CP-04-NORTH', 'SSB-VET-441'),
+            ('SSB-5521-N', 'Sub-Insp. Ananya Verma', 'Sub-Inspector / Biometrics', 'CP-04-NORTH', 'SSB-VET-812'),
+            ('SSB-9204-N', 'Asst. Sub-Insp. Vikram Adhikari', 'ASI / Document Verification', 'CP-02-RAXAUL', 'SSB-SEC-902'),
+        ]
+        for oid, name, rank, cp, badge in officers_to_seed:
+            cur.execute("""
+                INSERT INTO officers (officer_id, full_name, rank, checkpoint_id, badge_number, password_hash, status)
+                VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE')
+                ON CONFLICT (officer_id) DO UPDATE SET 
+                    password_hash = excluded.password_hash,
+                    full_name = excluded.full_name,
+                    rank = excluded.rank,
+                    checkpoint_id = excluded.checkpoint_id,
+                    badge_number = excluded.badge_number
+            """, (oid, name, rank, cp, badge, officer_pw_hash))
 
         # Seed default admin
         cur.execute("""
