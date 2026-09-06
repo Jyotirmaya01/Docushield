@@ -45,6 +45,22 @@ def get_git_status():
         return lines
     return []
 
+import json
+
+def update_deployment_status(status, details=None):
+    try:
+        data = {
+            "status": status,
+            "updatedAt": datetime.now().isoformat(),
+        }
+        if details:
+            data.update(details)
+        status_file = os.path.join(REPO_DIR, "deployment_status.json")
+        with open(status_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
+
 def log(msg):
     print(msg, flush=True)
 
