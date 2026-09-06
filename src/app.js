@@ -204,6 +204,8 @@ class DocuShieldApp {
         break;
       case 'admin':
         this.renderAdminRoster();
+        this.renderAdminPolicies();
+        this.renderAdminAudit();
         break;
     }
   }
