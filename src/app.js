@@ -1371,22 +1371,9 @@ class DocuShieldApp {
     // --- AUTHENTICATION MODE SWITCHER ---
     const tabOfficer = document.getElementById('tab-btn-officer');
     const tabAdmin = document.getElementById('tab-btn-admin');
-    const contentOfficer = document.getElementById('tab-content-officer');
-    const contentAdmin = document.getElementById('tab-content-admin');
 
-    tabOfficer?.addEventListener('click', () => {
-      tabOfficer.className = 'py-2.5 rounded-lg bg-surface-container text-primary font-bold uppercase transition-all flex items-center justify-center gap-1.5 shadow-sm';
-      tabAdmin.className = 'py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface font-semibold uppercase transition-all flex items-center justify-center gap-1.5';
-      contentOfficer?.classList.remove('hidden');
-      contentAdmin?.classList.add('hidden');
-    });
-
-    tabAdmin?.addEventListener('click', () => {
-      tabAdmin.className = 'py-2.5 rounded-lg bg-surface-container text-tertiary font-bold uppercase transition-all flex items-center justify-center gap-1.5 shadow-sm';
-      tabOfficer.className = 'py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface font-semibold uppercase transition-all flex items-center justify-center gap-1.5';
-      contentAdmin?.classList.remove('hidden');
-      contentOfficer?.classList.add('hidden');
-    });
+    tabOfficer?.addEventListener('click', () => this.switchLoginTab('officer'));
+    tabAdmin?.addEventListener('click', () => this.switchLoginTab('admin'));
 
     // --- PASSWORD VISIBILITY TOGGLE ---
     const togglePwBtn = document.getElementById('toggle-officer-pw-btn');
@@ -1427,7 +1414,7 @@ class DocuShieldApp {
       }
 
       if (res.success) {
-        this.applyOfficerSession(res.officer);
+        this.applyOfficerSession(res.officer, false);
         this.showToast(`✅ Welcome, ${res.officer.fullName}`);
         this.navigateTo('dashboard');
       } else {
@@ -1438,12 +1425,7 @@ class DocuShieldApp {
 
     // --- ONE-CLICK DEMO ACCESS BUTTON ---
     const demoBtn = document.getElementById('btn-quick-demo');
-    demoBtn?.addEventListener('click', async () => {
-      const demoOfficer = await AuthManager.loginDemoMode();
-      this.applyOfficerSession(demoOfficer);
-      this.showToast('⚡ Demo Mode Active: Welcome Inspector Rameshwar Singh');
-      this.navigateTo('dashboard');
-    });
+    demoBtn?.addEventListener('click', () => this.launchDemoMode());
 
     // --- SECTOR COMMAND ADMIN LOGIN ---
     const adminForm = document.getElementById('admin-login-form');
@@ -1477,6 +1459,10 @@ class DocuShieldApp {
         adminError?.classList.remove('hidden');
       }
     });
+
+    // --- ADMIN TO TERMINAL & PROFILE OPEN ADMIN ---
+    document.getElementById('admin-to-terminal-btn')?.addEventListener('click', () => this.navigateTo('dashboard'));
+    document.getElementById('btn-profile-open-admin')?.addEventListener('click', () => this.openAdminConsole());
 
     // --- ADMIN CONSOLE LOGOUT & ADD OFFICER ---
     const adminLogoutBtn = document.getElementById('admin-logout-btn');
