@@ -4,7 +4,12 @@
  * Falls back gracefully when backend is unreachable (offline-first).
  */
 
-const API_BASE = 'http://localhost:8000/api';
+export function getApiBase() {
+  const host = (typeof window !== 'undefined' && window.location && window.location.hostname && window.location.hostname !== 'localhost')
+    ? window.location.hostname
+    : '127.0.0.1';
+  return `http://${host}:8000/api`;
+}
 
 export class BackendAPI {
   /**
@@ -12,9 +17,9 @@ export class BackendAPI {
    */
   static async isAvailable() {
     try {
-      const resp = await fetch(`${API_BASE}/health`, { 
+      const resp = await fetch(`${getApiBase()}/health`, { 
         method: 'GET',
-        signal: AbortSignal.timeout(3000) 
+        signal: AbortSignal.timeout(1500) 
       });
       return resp.ok;
     } catch {
