@@ -1,0 +1,41 @@
+name: 🤝 Collaborator Task Proposal
+description: Propose a new feature, improvement, or module for DocuShield
+title: "[TASK]: "
+labels: ["collaboration", "proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Thanks for proposing a contribution to DocuShield!
+        Please fill out the details below before starting on code. @Jyotirmaya01 will review and approve the task scope.
+  - type: input
+    id: contributor
+    attributes:
+      label: Contributor Name / GitHub Handle
+      placeholder: "@friend-username"
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: What feature or improvement do you want to work on?
+      description: Explain what you plan to change or build.
+      placeholder: "e.g. Implement enhanced passport UV simulation canvas..."
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Which files will be impacted?
+      placeholder: "e.g. src/app.js, styles.css"
+    validations:
+      required: true
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Collaboration Agreement
+      options:
+        - label: I will create a dedicated feature branch and never push directly to `main`.
+          required: true
+        - label: I understand all code must be reviewed and approved by @Jyotirmaya01 before merging.
+          required: true
