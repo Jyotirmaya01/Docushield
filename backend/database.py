@@ -442,3 +442,91 @@ def get_dashboard_stats() -> dict:
             "avg_risk_score": avg_risk,
             "high_risk_count": high_risk,
         }
+
+
+# ============================================================
+# AUTHENTICATION & OFFICER MANAGEMENT
+# ============================================================
+
+def verify_officer(officer_id: str, password: str):
+    """Verify officer credentials."""
+    import hashlib
+    pw_hash = hashlib.sha256(password.encode()).hexdigest()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, officer_id, full_name, rank, checkpoint_id, badge_number, status, created_at
+            FROM officers
+            WHERE UPPER(officer_id) = UPPER(?) AND password_hash = ?
+        """, (officer_id.strip(), pw_hash))
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def verify_admin(admin_id: str, password: str):
+    """Verify administrator credentials."""
+    import hashlib
+    pw_hash = hashlib.sha256(password.encode()).hexdigest()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, admin_id, full_name, role, created_at
+            FROM admins
+            WHERE UPPER(admin_id) = UPPER(?) AND password_hash = ?
+        """, (admin_id.strip(), pw_hash))
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def get_all_officers():
+    """Return all registered officers (excluding password hash)."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT officer_id, full_name, rank, checkpoint_id, badge_number, status, created_at
+            FROM officers
+            ORDER BY created_at DESC
+        """)
+        return [dict(r) for r in cur.fetchall()]
+
+
+def insert_officer(officer_data: dict):
+    """Admin provisions a new officer in the database."""
+    import hashlib
+    pw = officer_data.get("password", "")
+    pw_hash = hashlib.sha256(pw.encode()).hexdigest() if pw else ""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO officers (officer_id, full_name, rank, checkpoint_id, badge_number, password_hash, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE')
+        """, (
+            officer_data.get("officer_id", "").strip().upper(),
+            officer_data.get("full_name", "").strip(),
+            officer_data.get("rank", "Sub-Inspector"),
+            officer_data.get("checkpoint_id", "CP-04-NORTH"),
+            officer_data.get("badge_number", "SSB-REG"),
+            pw_hash
+        ))
+        return {
+            "officer_id": officer_data.get("officer_id", "").strip().upper(),
+            "full_name": officer_data.get("full_name", "").strip(),
+            "rank": officer_data.get("rank", "Sub-Inspector"),
+            "checkpoint_id": officer_data.get("checkpoint_id", "CP-04-NORTH"),
+            "badge_number": officer_data.get("badge_number", "SSB-REG"),
+            "status": "ACTIVE"
+        }
+
+
+def toggle_officer_status(officer_id: str):
+    """Toggle officer active/suspended status."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT status FROM officers WHERE UPPER(officer_id) = UPPER(?)", (officer_id.strip(),))
+        row = cur.fetchone()
+        if not row:
+            return None
+        new_status = "SUSPENDED" if row["status"] == "ACTIVE" else "ACTIVE"
+        cur.execute("UPDATE officers SET status = ? WHERE UPPER(officer_id) = UPPER(?)", (new_status, officer_id.strip()))
+        return {"officer_id": officer_id, "status": new_status}
+
