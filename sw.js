@@ -13,6 +13,7 @@ const ASSETS_TO_CACHE = [
   './src/pipeline/mrzValidator.js',
   './src/pipeline/forensicEngine.js',
   './src/api/backendClient.js',
+  './src/auth/authManager.js',
   './src/app.js',
   './assets/logo.svg',
   './assets/icon-192.png',
@@ -29,12 +30,12 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Install — cache all core assets for offline use
+// Install — stage all core assets in background for offline use & zero downtime
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS_TO_CACHE);
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
