@@ -22,6 +22,13 @@ const ASSETS_TO_CACHE = [
   './assets/apple-touch-icon.png'
 ];
 
+// Listen for skip waiting message from app client for real-time updates
+self.addEventListener('message', (event) => {
+  if (event.data && (event.data.type === 'SKIP_WAITING' || event.data === 'skipWaiting')) {
+    self.skipWaiting();
+  }
+});
+
 // Install — cache all core assets for offline use
 self.addEventListener('install', (event) => {
   event.waitUntil(

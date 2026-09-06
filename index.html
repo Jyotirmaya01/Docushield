@@ -924,13 +924,69 @@
 
   <!-- PWA Service Worker Registration & Install Logic -->
   <script>
-    // Service Worker
+    // Real-Time Service Worker Registration & Live Auto-Update
+    let swRegistration = null;
+    let refreshing = false;
+
+    function showUpdateToast(msg) {
+      const toast = document.getElementById('app-toast');
+      if (!toast) return;
+      const toastText = toast.querySelector('.toast-text');
+      if (toastText) toastText.textContent = msg;
+      toast.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 3500);
+    }
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js').then((reg) => {
+          swRegistration = reg;
           console.log('DocuShield Service Worker active:', reg.scope);
+
+          // If a new worker is already waiting, trigger update
+          if (reg.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+
+          // Detect new service worker updates in real time
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            if (!newWorker) return;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('⚡ Real-time update detected. Activating new version...');
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+              }
+            });
+          });
+
+          // Check for updates every 30 seconds automatically
+          setInterval(() => {
+            reg.update().catch(() => {});
+          }, 30000);
+
+          // Check for update whenever user focuses/returns to the app
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+              reg.update().catch(() => {});
+            }
+          });
         }).catch((err) => {
           console.log('Service Worker registration skipped:', err);
+        });
+
+        // When the new worker takes control, refresh page seamlessly once
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (refreshing) return;
+          refreshing = true;
+          showUpdateToast('⚡ Real-Time Update Applied! Loading latest changes...');
+          setTimeout(() => {
+            window.location.reload();
+          }, 800);
         });
       });
     }
