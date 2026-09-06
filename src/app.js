@@ -913,36 +913,87 @@ class DocuShieldApp {
     }
   }
 
-  // --- ADMIN CONSOLE & OFFICER ROSTER ---
+  // --- ADMIN CONSOLE & SECTOR MANAGEMENT ---
 
   renderAdminRoster() {
     const listEl = document.getElementById('admin-officers-list');
     const countEl = document.getElementById('admin-roster-count');
+    const totalEl = document.getElementById('admin-stat-total');
+    const activeEl = document.getElementById('admin-stat-active');
+    const suspendedEl = document.getElementById('admin-stat-suspended');
+    const threatBadge = document.getElementById('admin-threat-badge');
+
     if (!listEl) return;
 
-    const officers = AuthManager.getOfficersFromStorage();
-    if (countEl) countEl.textContent = `${officers.length} Enrolled`;
+    const allOfficers = AuthManager.getOfficersFromStorage();
+    const config = AuthManager.getSectorConfig();
+
+    // Update KPI badges
+    const totalCount = allOfficers.length;
+    const activeCount = allOfficers.filter(o => o.status === 'ACTIVE').length;
+    const suspendedCount = allOfficers.filter(o => o.status === 'SUSPENDED').length;
+
+    if (totalEl) totalEl.textContent = totalCount;
+    if (activeEl) activeEl.textContent = activeCount;
+    if (suspendedEl) suspendedEl.textContent = suspendedCount;
+    if (countEl) countEl.textContent = `${totalCount} Enrolled`;
+
+    if (threatBadge) {
+      threatBadge.textContent = `THREAT: ${config.threatLevel}`;
+      if (config.threatLevel === 'CHARLIE') {
+        threatBadge.className = 'px-2 py-0.5 rounded-full bg-error-container/40 text-error font-mono text-[9px] font-bold border border-error/50 animate-pulse';
+      } else if (config.threatLevel === 'BRAVO') {
+        threatBadge.className = 'px-2 py-0.5 rounded-full bg-tertiary/20 text-tertiary font-mono text-[9px] font-bold border border-tertiary/40';
+      } else {
+        threatBadge.className = 'px-2 py-0.5 rounded-full bg-secondary/20 text-secondary font-mono text-[9px] font-bold border border-secondary/30';
+      }
+    }
+
+    // Filter by search query and status dropdown
+    const searchQuery = (document.getElementById('admin-search-input')?.value || '').trim().toLowerCase();
+    const statusFilter = document.getElementById('admin-filter-status')?.value || 'ALL';
+
+    const officers = allOfficers.filter(o => {
+      if (statusFilter !== 'ALL' && o.status !== statusFilter) return false;
+      if (searchQuery) {
+        const q = searchQuery;
+        const matchName = (o.fullName || '').toLowerCase().includes(q);
+        const matchId = (o.id || '').toLowerCase().includes(q);
+        const matchStation = (o.checkpointName || o.checkpointId || '').toLowerCase().includes(q);
+        const matchRank = (o.rank || '').toLowerCase().includes(q);
+        return matchName || matchId || matchStation || matchRank;
+      }
+      return true;
+    });
 
     if (officers.length === 0) {
-      listEl.innerHTML = '<div class="p-6 text-center font-mono text-xs text-outline">No officers enrolled yet.</div>';
+      listEl.innerHTML = `
+        <div class="p-8 text-center font-mono text-xs text-outline flex flex-col items-center gap-2">
+          <span class="material-symbols-outlined text-3xl opacity-50">search_off</span>
+          <span>No officer records matching your criteria.</span>
+        </div>
+      `;
       return;
     }
 
     listEl.innerHTML = officers.map(o => {
       const isActive = o.status === 'ACTIVE';
       const initials = (o.fullName || 'Officer').split(' ').map(n => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'OF';
+      const enrolledDate = o.enrolledAt ? new Date(o.enrolledAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Verified';
+
       return `
-        <div class="p-3.5 rounded-xl bg-surface-container-highest/60 border border-outline/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-primary/40 transition-all">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-surface-container border border-outline/30 flex items-center justify-center text-primary font-bold font-mono text-xs flex-shrink-0">
+        <div class="p-3.5 rounded-xl bg-surface-container-highest/60 border border-outline/20 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:border-primary/40 transition-all">
+          <div class="flex items-start sm:items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-surface-container border border-outline/30 flex items-center justify-center text-primary font-bold font-mono text-xs flex-shrink-0 mt-0.5 sm:mt-0">
               ${initials}
             </div>
             <div class="flex flex-col">
-              <div class="flex items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2">
                 <span class="font-bold text-xs text-on-surface">${o.fullName}</span>
                 <span class="px-2 py-0.5 rounded text-[9px] font-mono font-bold ${isActive ? 'bg-secondary/20 text-secondary border border-secondary/30' : 'bg-error-container/30 text-error border border-error/30'}">
                   ${o.status}
                 </span>
+                <span class="font-mono text-[10px] text-outline">Enrolled: ${enrolledDate}</span>
               </div>
               <div class="flex flex-wrap items-center gap-2 font-mono text-[11px] text-on-surface-variant mt-0.5">
                 <span class="text-primary font-semibold">${o.id}</span>
@@ -950,44 +1001,214 @@ class DocuShieldApp {
                 <span>${o.rank}</span>
                 <span>•</span>
                 <span>${o.checkpointName || o.checkpointId}</span>
+                ${o.badgeNumber ? `<span>• Badge: ${o.badgeNumber}</span>` : ''}
               </div>
             </div>
           </div>
-          <div class="flex items-center gap-2 self-end sm:self-center flex-shrink-0">
+
+          <div class="flex flex-wrap items-center gap-1.5 self-end md:self-center flex-shrink-0">
+            <button type="button" class="btn-quick-login-officer px-2.5 py-1 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary text-[10px] font-mono uppercase font-bold transition-all flex items-center gap-1" data-officer-id="${o.id}" title="Login as this officer">
+              <span class="material-symbols-outlined text-[13px]">login</span>
+              <span>Login As</span>
+            </button>
+
             <button type="button" class="btn-toggle-status px-2.5 py-1 rounded-lg text-[10px] font-mono uppercase font-semibold border transition-all ${isActive ? 'border-error/40 text-error hover:bg-error-container/20' : 'border-secondary/40 text-secondary hover:bg-secondary/20'}" data-officer-id="${o.id}">
               ${isActive ? 'Suspend' : 'Activate'}
             </button>
-            <button type="button" class="btn-quick-login-officer px-2.5 py-1 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary text-[10px] font-mono uppercase font-bold transition-all" data-officer-id="${o.id}">
-              Login As
+
+            <button type="button" class="btn-open-reset-pin px-2 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline/20 text-on-surface text-[10px] font-mono uppercase font-semibold transition-all flex items-center gap-1" data-officer-id="${o.id}" data-officer-name="${o.fullName}" title="Reset Terminal PIN">
+              <span class="material-symbols-outlined text-[13px]">key</span>
+              <span>PIN</span>
+            </button>
+
+            <button type="button" class="btn-open-edit-officer px-2 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline/20 text-on-surface text-[10px] font-mono uppercase font-semibold transition-all flex items-center gap-1" data-officer-id="${o.id}" title="Edit officer details">
+              <span class="material-symbols-outlined text-[13px]">edit</span>
+              <span>Edit</span>
+            </button>
+
+            <button type="button" class="btn-delete-officer px-2 py-1 rounded-lg border border-error/20 text-error/80 hover:text-error hover:bg-error-container/20 text-[10px] font-mono uppercase font-semibold transition-all" data-officer-id="${o.id}" title="Decommission officer badge">
+              <span class="material-symbols-outlined text-[13px]">delete</span>
             </button>
           </div>
         </div>
       `;
     }).join('');
 
-    // Bind toggle buttons
+    this.bindAdminRosterActions(listEl);
+  }
+
+  bindAdminRosterActions(listEl) {
+    // Toggle Status
     listEl.querySelectorAll('.btn-toggle-status').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const id = e.currentTarget.dataset.officerId;
-        AuthManager.toggleOfficerStatus(id);
+        const updated = AuthManager.toggleOfficerStatus(id);
         this.renderAdminRoster();
-        this.showToast(`Status updated for ${id}`);
+        this.renderAdminAudit();
+        this.showToast(`Officer ${id} status set to ${updated?.status || 'UPDATED'}`);
       });
     });
 
-    // Bind login-as buttons
+    // Login As
     listEl.querySelectorAll('.btn-quick-login-officer').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const id = e.currentTarget.dataset.officerId;
         const currentOfficers = AuthManager.getOfficersFromStorage();
         const officer = currentOfficers.find(o => o.id === id);
         if (officer) {
+          if (officer.status !== 'ACTIVE') {
+            this.showToast(`Cannot login: Officer ${id} is SUSPENDED.`);
+            return;
+          }
           this.applyOfficerSession(officer);
           this.showToast(`Switched to Officer ${officer.id}`);
           this.navigateTo('dashboard');
         }
       });
     });
+
+    // Reset PIN Modal trigger
+    listEl.querySelectorAll('.btn-open-reset-pin').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.officerId;
+        const name = e.currentTarget.dataset.officerName;
+        const modal = document.getElementById('modal-reset-pin');
+        document.getElementById('reset-modal-officer-name').textContent = name || id;
+        document.getElementById('reset-modal-officer-id').textContent = id;
+        document.getElementById('reset-modal-target-id').value = id;
+        const pinInput = document.getElementById('reset-modal-new-pin');
+        if (pinInput) pinInput.value = '';
+        const feedback = document.getElementById('reset-modal-feedback');
+        if (feedback) feedback.className = 'hidden';
+        modal?.classList.remove('hidden');
+        pinInput?.focus();
+      });
+    });
+
+    // Edit Officer Modal trigger
+    listEl.querySelectorAll('.btn-open-edit-officer').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.officerId;
+        const currentOfficers = AuthManager.getOfficersFromStorage();
+        const officer = currentOfficers.find(o => o.id === id);
+        if (!officer) return;
+
+        document.getElementById('edit-modal-target-id').value = officer.id;
+        document.getElementById('edit-modal-name').value = officer.fullName || '';
+        document.getElementById('edit-modal-rank').value = officer.rank || 'Sub-Inspector / Screener';
+        document.getElementById('edit-modal-checkpoint').value = officer.checkpointId || 'CP-04-NORTH';
+        document.getElementById('edit-modal-badge').value = officer.badgeNumber || '';
+
+        document.getElementById('modal-edit-officer')?.classList.remove('hidden');
+      });
+    });
+
+    // Decommission Officer
+    listEl.querySelectorAll('.btn-delete-officer').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.officerId;
+        if (confirm(`Are you sure you want to DECOMMISSION officer ${id}? This will permanently remove access credentials.`)) {
+          try {
+            AuthManager.deleteOfficer(id);
+            this.renderAdminRoster();
+            this.renderAdminAudit();
+            this.showToast(`Officer ${id} decommissioned.`);
+          } catch (err) {
+            alert(err.message);
+          }
+        }
+      });
+    });
+  }
+
+  renderAdminPolicies() {
+    const config = AuthManager.getSectorConfig();
+
+    // Threat level choice buttons
+    document.querySelectorAll('.btn-threat-choice').forEach(btn => {
+      const threat = btn.dataset.threat;
+      const isSelected = config.threatLevel === threat;
+      const icon = btn.querySelector('.material-symbols-outlined');
+      if (isSelected) {
+        if (threat === 'ALPHA') {
+          btn.className = 'btn-threat-choice p-4 rounded-xl border text-left flex flex-col gap-1.5 transition-all bg-secondary/15 border-secondary text-secondary';
+        } else if (threat === 'BRAVO') {
+          btn.className = 'btn-threat-choice p-4 rounded-xl border text-left flex flex-col gap-1.5 transition-all bg-tertiary/15 border-tertiary text-tertiary';
+        } else {
+          btn.className = 'btn-threat-choice p-4 rounded-xl border text-left flex flex-col gap-1.5 transition-all bg-error-container/30 border-error text-error';
+        }
+        if (icon) {
+          icon.textContent = 'check_circle';
+          icon.className = 'material-symbols-outlined text-[20px]';
+        }
+      } else {
+        btn.className = 'btn-threat-choice p-4 rounded-xl border text-left flex flex-col gap-1.5 transition-all bg-surface-container-highest/50 border-outline/20 hover:border-outline/40 text-on-surface';
+        if (icon) {
+          icon.textContent = 'radio_button_unchecked';
+          icon.className = 'material-symbols-outlined text-[20px] text-outline';
+        }
+      }
+    });
+
+    // Checkboxes
+    const dualBio = document.getElementById('policy-dual-biometrics');
+    if (dualBio) dualBio.checked = !!config.dualBiometrics;
+
+    const strictUv = document.getElementById('policy-strict-uv');
+    if (strictUv) strictUv.checked = config.strictUv !== false;
+
+    const interpol = document.getElementById('policy-interpol-flag');
+    if (interpol) interpol.checked = config.autoFlagInterpol !== false;
+
+    const lockdown = document.getElementById('policy-lockdown-mode');
+    if (lockdown) lockdown.checked = !!config.lockdownMode;
+
+    const alertMsg = document.getElementById('policy-alert-message');
+    if (alertMsg) alertMsg.value = config.alertMessage || 'Normal border screening operations in effect.';
+  }
+
+  renderAdminAudit() {
+    const listEl = document.getElementById('admin-audit-entries-list');
+    if (!listEl) return;
+
+    const logs = AuthManager.getAdminAuditLogs();
+
+    if (logs.length === 0) {
+      listEl.innerHTML = '<div class="p-6 text-center font-mono text-xs text-outline">Audit trail is currently empty.</div>';
+      return;
+    }
+
+    listEl.innerHTML = logs.map(l => {
+      const timeStr = new Date(l.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const dateStr = new Date(l.timestamp).toLocaleDateString([], { day: '2-digit', month: 'short' });
+
+      let actionBadge = 'bg-primary/20 text-primary border-primary/30';
+      if (l.action === 'STATUS_CHANGE' || l.action === 'DECOMMISSION_OFFICER') {
+        actionBadge = 'bg-error-container/30 text-error border-error/30';
+      } else if (l.action === 'CONFIG_UPDATE') {
+        actionBadge = 'bg-tertiary/20 text-tertiary border-tertiary/30';
+      } else if (l.action === 'ENROLL_OFFICER') {
+        actionBadge = 'bg-secondary/20 text-secondary border-secondary/30';
+      }
+
+      return `
+        <div class="p-3 rounded-xl bg-surface-container-highest/50 border border-outline/15 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:border-outline/30 transition-all">
+          <div class="flex items-start sm:items-center gap-2.5">
+            <span class="px-2 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wider ${actionBadge}">
+              ${l.action}
+            </span>
+            <div class="flex flex-col">
+              <span class="text-on-surface font-semibold text-[11px]">${l.details}</span>
+              <span class="text-outline text-[10px]">Target: <code class="text-primary">${l.target || 'SYSTEM'}</code> · By: ${l.adminName || 'Admin'} (${l.adminId})</span>
+            </div>
+          </div>
+          <div class="text-right text-[10px] text-outline flex-shrink-0">
+            <span>${dateStr} ${timeStr}</span>
+            <div class="text-[8px] text-outline/60">${l.id}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
   updateSyncUI() {
