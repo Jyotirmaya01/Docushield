@@ -155,20 +155,27 @@ class DocuShieldApp {
 
   applyOfficerSession(officer, isDemo = false) {
     if (!officer) return;
-    const isDemoMode = isDemo || officer.isDemo === true;
-    CONFIG.OFFICER.name = officer.fullName;
-    CONFIG.OFFICER.id = officer.id;
-    CONFIG.OFFICER.rank = officer.rank;
-    CONFIG.OFFICER.badge = officer.badgeNumber;
+    const isDemoMode = isDemo === true || officer.isDemo === true;
+    const officerId = (officer.id || officer.officer_id || 'SSB-OFFICER').toString().trim().toUpperCase();
+    const fullName = officer.fullName || officer.full_name || 'Border Officer';
+    const rank = officer.rank || 'Inspector / Screening Lead';
+    const badge = officer.badgeNumber || officer.badge_number || 'SSB-REG';
+    const checkpoint = officer.checkpointName || officer.checkpoint_name || 'Checkpoint CP-04 (Panitanki Terminal)';
+    const shift = officer.shift || '06:00 - 14:00 (Alpha)';
+
+    CONFIG.OFFICER.name = fullName;
+    CONFIG.OFFICER.id = officerId;
+    CONFIG.OFFICER.rank = rank;
+    CONFIG.OFFICER.badge = badge;
 
     // Derive initials (e.g. "Rameshwar Singh" -> "RS")
-    const initials = officer.fullName.split(' ').map(n => n.replace(/[^A-Za-z]/g, '')).filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || 'SO';
+    const initials = fullName.split(' ').map(n => n.replace(/[^A-Za-z]/g, '')).filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || 'SO';
 
     // Header badge
     const headerBadge = document.getElementById('header-officer-badge');
     if (headerBadge) {
       headerBadge.textContent = initials;
-      headerBadge.title = isDemoMode ? 'Demo Inspector (Sandbox)' : `${officer.fullName} (${officer.id})`;
+      headerBadge.title = isDemoMode ? 'Demo Inspector (Sandbox)' : `${fullName} (${officerId})`;
     }
 
     // Dashboard card elements
@@ -189,10 +196,10 @@ class DocuShieldApp {
         dashStation.innerHTML = `<span class="material-symbols-outlined text-[14px] text-tertiary">science</span><span class="text-tertiary font-bold">DEMO CHECKPOINT CP-04 (PANITANKI TERMINAL - SANDBOX)</span>`;
       }
       if (dashName) {
-        dashName.innerHTML = `Insp. Rameshwar Singh <span class="text-tertiary font-mono text-xs px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 uppercase font-bold">DEMO PREVIEW</span>`;
+        dashName.innerHTML = `${fullName} <span class="text-tertiary font-mono text-xs px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 uppercase font-bold">DEMO PREVIEW</span>`;
       }
       if (dashMeta) {
-        dashMeta.innerHTML = `<span>Shift: 06:00 - 14:00 (Alpha)</span><span>•</span><span>ID: SSB-7489-N</span><span>•</span><span class="text-secondary font-semibold">Demo Sandbox Active</span>`;
+        dashMeta.innerHTML = `<span>Shift: ${shift}</span><span>•</span><span>DEMO ID: ${officerId}</span><span>•</span><span class="text-secondary font-semibold">Demo Sandbox Active</span>`;
       }
       if (dashSessionBanner) {
         dashSessionBanner.className = 'w-full px-3 py-2 rounded-xl bg-gradient-to-r from-tertiary/20 via-primary/10 to-tertiary/20 border border-tertiary/40 flex items-center justify-between font-mono text-xs text-tertiary mb-2 shadow-sm';
@@ -211,20 +218,21 @@ class DocuShieldApp {
         dashSessionBanner.classList.remove('hidden');
       }
     } else {
+      // AUTHENTICATED BORDER OFFICER DASHBOARD SPECIFIC TO THIS SERIAL ID
       if (dashModeIndicator) {
         dashModeIndicator.innerHTML = `
           <span class="material-symbols-outlined text-secondary text-[16px]">verified_user</span>
-          <span class="font-mono text-[10px] uppercase text-secondary font-bold">VERIFIED BORDER TERMINAL (AUTHENTICATED)</span>
+          <span class="font-mono text-[10px] uppercase text-secondary font-bold">BORDER OFFICER TERMINAL · SERIAL ID: ${officerId}</span>
         `;
       }
       if (dashStation) {
-        dashStation.innerHTML = `<span class="material-symbols-outlined text-[14px]">location_on</span><span>${(officer.checkpointName || 'CHECKPOINT CP-04 · INDO-NEPAL').toUpperCase()}</span>`;
+        dashStation.innerHTML = `<span class="material-symbols-outlined text-[14px] text-primary">location_on</span><span class="text-primary font-bold">${checkpoint.toUpperCase()}</span>`;
       }
       if (dashName) {
-        dashName.innerHTML = `${officer.fullName} <span class="text-secondary font-mono text-xs px-2 py-0.5 rounded bg-secondary/15 border border-secondary/30 uppercase font-bold">${officer.badgeNumber || 'SSB'}</span>`;
+        dashName.innerHTML = `${fullName} <span class="text-secondary font-mono text-xs px-2 py-0.5 rounded bg-secondary/15 border border-secondary/30 uppercase font-bold">${badge}</span>`;
       }
       if (dashMeta) {
-        dashMeta.innerHTML = `<span>Shift: ${officer.shift || '06:00 - 14:00'}</span><span>•</span><span>ID: ${officer.id}</span><span>•</span><span>Rank: ${officer.rank || 'Inspector'}</span>`;
+        dashMeta.innerHTML = `<span>Shift: ${shift}</span><span>•</span><span class="text-secondary font-bold">SERIAL ID: ${officerId}</span><span>•</span><span>Rank: ${rank}</span>`;
       }
       if (dashSessionBanner) {
         dashSessionBanner.className = 'w-full px-3 py-2 rounded-xl bg-secondary/10 border border-secondary/30 flex items-center justify-between font-mono text-xs text-secondary mb-2 shadow-sm';
@@ -232,8 +240,8 @@ class DocuShieldApp {
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-[18px] text-secondary">verified</span>
             <div>
-              <span class="font-bold">OFFICER TERMINAL: ${officer.id}</span>
-              <span class="text-[10px] text-on-surface-variant block sm:inline sm:ml-2">Authenticated Border Verification Console.</span>
+              <span class="font-bold">OFFICER DASHBOARD · SERIAL ID: ${officerId}</span>
+              <span class="text-[10px] text-on-surface-variant block sm:inline sm:ml-2">Verified Border Screening Terminal for ${fullName} (${rank}).</span>
             </div>
           </div>
           <button type="button" onclick="window.app.logoutOfficer()" class="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-error/20 text-[10px] text-error font-bold transition-all flex-shrink-0 border border-outline/20">
@@ -250,9 +258,9 @@ class DocuShieldApp {
     const profileRankId = document.getElementById('profile-officer-rank-id');
     const profileStation = document.getElementById('profile-officer-station');
     if (profileAvatar) profileAvatar.textContent = initials;
-    if (profileName) profileName.textContent = isDemoMode ? `${officer.fullName} (Demo)` : officer.fullName;
-    if (profileRankId) profileRankId.textContent = `${officer.id} · ${officer.rank}`;
-    if (profileStation) profileStation.textContent = `${officer.checkpointName || 'Panitanki Border CP-04'} (${officer.shift || 'Alpha Shift'})`;
+    if (profileName) profileName.textContent = isDemoMode ? `${fullName} (Demo Sandbox)` : fullName;
+    if (profileRankId) profileRankId.textContent = `SERIAL ID: ${officerId} · ${rank}`;
+    if (profileStation) profileStation.textContent = `${checkpoint} (${shift})`;
   }
 
   navigateTo(screenId) {
