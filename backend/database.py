@@ -53,7 +53,7 @@ def init_database():
     with get_db() as conn:
         cur = conn.cursor()
 
-        # Officers table
+        # Officers table with password and status
         cur.execute("""
             CREATE TABLE IF NOT EXISTS officers (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,16 +62,50 @@ def init_database():
                 rank            TEXT,
                 checkpoint_id   TEXT,
                 badge_number    TEXT,
+                password_hash   TEXT,
+                status          TEXT DEFAULT 'ACTIVE',
                 created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
+        # Check existing table columns (safe migration)
+        cur.execute("PRAGMA table_info(officers)")
+        cols = [r['name'] for r in cur.fetchall()]
+        if 'password_hash' not in cols:
+            cur.execute("ALTER TABLE officers ADD COLUMN password_hash TEXT")
+        if 'status' not in cols:
+            cur.execute("ALTER TABLE officers ADD COLUMN status TEXT DEFAULT 'ACTIVE'")
+
+        # Admins table
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS admins (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id        TEXT UNIQUE NOT NULL,
+                full_name       TEXT NOT NULL,
+                role            TEXT DEFAULT 'ADMIN',
+                password_hash   TEXT NOT NULL,
+                created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # SHA-256 for default passwords
+        import hashlib
+        officer_pw_hash = hashlib.sha256("882194".encode()).hexdigest()
+        admin_pw_hash = hashlib.sha256("admin".encode()).hexdigest()
+
         # Seed default officer
         cur.execute("""
-            INSERT INTO officers (officer_id, full_name, rank, checkpoint_id, badge_number)
-            VALUES ('SSB-7489-N', 'Inspector Rameshwar Singh', 'Inspector / Screening Lead', 'CP-04-NORTH', 'SSB-VET-441')
-            ON CONFLICT (officer_id) DO NOTHING
-        """)
+            INSERT INTO officers (officer_id, full_name, rank, checkpoint_id, badge_number, password_hash, status)
+            VALUES ('SSB-7489-N', 'Inspector Rameshwar Singh', 'Inspector / Screening Lead', 'CP-04-NORTH', 'SSB-VET-441', ?, 'ACTIVE')
+            ON CONFLICT (officer_id) DO UPDATE SET password_hash = excluded.password_hash
+        """, (officer_pw_hash,))
+
+        # Seed default admin
+        cur.execute("""
+            INSERT INTO admins (admin_id, full_name, role, password_hash)
+            VALUES ('ADMIN-01', 'Sector Commander Rajesh Joshi', 'ADMIN', ?)
+            ON CONFLICT (admin_id) DO UPDATE SET password_hash = excluded.password_hash
+        """, (admin_pw_hash,))
 
         # Scanned documents table — stores images as JPEG BLOB
         cur.execute("""
