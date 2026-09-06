@@ -81,10 +81,17 @@ class DocuShieldApp {
     }
   }
 
-  init() {
+  async init() {
+    await AuthManager.initDatabase();
     this.bindEvents();
     this.updateSyncUI();
     syncInstance.subscribe(() => this.updateSyncUI());
+
+    const activeSession = AuthManager.getActiveSession();
+    if (activeSession && activeSession.role === 'OFFICER') {
+      this.applyOfficerSession(activeSession);
+    }
+
     this.navigateTo('login');
 
     // Check backend availability on startup
@@ -92,6 +99,39 @@ class DocuShieldApp {
       this.backendAvailable = available;
       console.log(`[DocuShield] Backend SQLite: ${available ? '✅ CONNECTED' : '⚠️ OFFLINE (local-only mode)'}`);
     });
+  }
+
+  applyOfficerSession(officer) {
+    if (!officer) return;
+    CONFIG.OFFICER.name = officer.fullName;
+    CONFIG.OFFICER.id = officer.id;
+    CONFIG.OFFICER.rank = officer.rank;
+    CONFIG.OFFICER.badge = officer.badgeNumber;
+
+    // Derive initials (e.g. "Rameshwar Singh" -> "RS")
+    const initials = officer.fullName.split(' ').map(n => n.replace(/[^A-Za-z]/g, '')).filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || 'SO';
+
+    // Header badge
+    const headerBadge = document.getElementById('header-officer-badge');
+    if (headerBadge) headerBadge.textContent = initials;
+
+    // Dashboard card
+    const dashName = document.getElementById('dash-officer-name');
+    const dashMeta = document.getElementById('dash-officer-meta');
+    const dashStation = document.getElementById('dash-officer-checkpoint');
+    if (dashName) dashName.innerHTML = `${officer.fullName} <span class="text-on-surface-variant font-normal text-sm">(SSB)</span>`;
+    if (dashMeta) dashMeta.innerHTML = `<span>Shift: ${officer.shift || '06:00 - 14:00'}</span><span>•</span><span>ID: ${officer.id}</span>`;
+    if (dashStation && officer.checkpointName) dashStation.innerHTML = `<span class="material-symbols-outlined text-[14px]">location_on</span><span>${officer.checkpointName.toUpperCase()}</span>`;
+
+    // Profile card
+    const profileAvatar = document.getElementById('profile-officer-avatar');
+    const profileName = document.getElementById('profile-officer-name');
+    const profileRankId = document.getElementById('profile-officer-rank-id');
+    const profileStation = document.getElementById('profile-officer-station');
+    if (profileAvatar) profileAvatar.textContent = initials;
+    if (profileName) profileName.textContent = officer.fullName;
+    if (profileRankId) profileRankId.textContent = `${officer.id} · ${officer.rank}`;
+    if (profileStation) profileStation.textContent = `${officer.checkpointName || 'Panitanki Border CP-04'} (${officer.shift || 'Alpha Shift'})`;
   }
 
   navigateTo(screenId) {
@@ -112,7 +152,7 @@ class DocuShieldApp {
     const header = document.getElementById('app-header');
     const nav = document.getElementById('app-navigation');
 
-    if (screenId === 'login') {
+    if (screenId === 'login' || screenId === 'admin') {
       if (header) header.classList.add('hidden');
       if (nav) nav.classList.add('hidden');
     } else {
@@ -161,6 +201,9 @@ class DocuShieldApp {
         break;
       case 'profile':
         this.renderProfile();
+        break;
+      case 'admin':
+        this.renderAdminRoster();
         break;
     }
   }
