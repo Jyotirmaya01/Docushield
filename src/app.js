@@ -913,6 +913,83 @@ class DocuShieldApp {
     }
   }
 
+  // --- ADMIN CONSOLE & OFFICER ROSTER ---
+
+  renderAdminRoster() {
+    const listEl = document.getElementById('admin-officers-list');
+    const countEl = document.getElementById('admin-roster-count');
+    if (!listEl) return;
+
+    const officers = AuthManager.getOfficersFromStorage();
+    if (countEl) countEl.textContent = `${officers.length} Enrolled`;
+
+    if (officers.length === 0) {
+      listEl.innerHTML = '<div class="p-6 text-center font-mono text-xs text-outline">No officers enrolled yet.</div>';
+      return;
+    }
+
+    listEl.innerHTML = officers.map(o => {
+      const isActive = o.status === 'ACTIVE';
+      const initials = (o.fullName || 'Officer').split(' ').map(n => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'OF';
+      return `
+        <div class="p-3.5 rounded-xl bg-surface-container-highest/60 border border-outline/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-primary/40 transition-all">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-surface-container border border-outline/30 flex items-center justify-center text-primary font-bold font-mono text-xs flex-shrink-0">
+              ${initials}
+            </div>
+            <div class="flex flex-col">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-xs text-on-surface">${o.fullName}</span>
+                <span class="px-2 py-0.5 rounded text-[9px] font-mono font-bold ${isActive ? 'bg-secondary/20 text-secondary border border-secondary/30' : 'bg-error-container/30 text-error border border-error/30'}">
+                  ${o.status}
+                </span>
+              </div>
+              <div class="flex flex-wrap items-center gap-2 font-mono text-[11px] text-on-surface-variant mt-0.5">
+                <span class="text-primary font-semibold">${o.id}</span>
+                <span>•</span>
+                <span>${o.rank}</span>
+                <span>•</span>
+                <span>${o.checkpointName || o.checkpointId}</span>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 self-end sm:self-center flex-shrink-0">
+            <button type="button" class="btn-toggle-status px-2.5 py-1 rounded-lg text-[10px] font-mono uppercase font-semibold border transition-all ${isActive ? 'border-error/40 text-error hover:bg-error-container/20' : 'border-secondary/40 text-secondary hover:bg-secondary/20'}" data-officer-id="${o.id}">
+              ${isActive ? 'Suspend' : 'Activate'}
+            </button>
+            <button type="button" class="btn-quick-login-officer px-2.5 py-1 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary text-[10px] font-mono uppercase font-bold transition-all" data-officer-id="${o.id}">
+              Login As
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Bind toggle buttons
+    listEl.querySelectorAll('.btn-toggle-status').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.officerId;
+        AuthManager.toggleOfficerStatus(id);
+        this.renderAdminRoster();
+        this.showToast(`Status updated for ${id}`);
+      });
+    });
+
+    // Bind login-as buttons
+    listEl.querySelectorAll('.btn-quick-login-officer').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.officerId;
+        const currentOfficers = AuthManager.getOfficersFromStorage();
+        const officer = currentOfficers.find(o => o.id === id);
+        if (officer) {
+          this.applyOfficerSession(officer);
+          this.showToast(`Switched to Officer ${officer.id}`);
+          this.navigateTo('dashboard');
+        }
+      });
+    });
+  }
+
   updateSyncUI() {
     const isOnline = syncInstance.isOnline();
     const isSyncing = syncInstance.isSyncing;
