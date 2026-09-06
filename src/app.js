@@ -947,14 +947,177 @@ class DocuShieldApp {
       });
     });
 
-    // Login screen trigger
-    const loginForm = document.getElementById('login-form');
-    if (loginForm) {
-      loginForm.addEventListener('submit', (e) => {
-        e.preventDefault();
+    // --- AUTHENTICATION MODE SWITCHER ---
+    const tabOfficer = document.getElementById('tab-btn-officer');
+    const tabAdmin = document.getElementById('tab-btn-admin');
+    const contentOfficer = document.getElementById('tab-content-officer');
+    const contentAdmin = document.getElementById('tab-content-admin');
+
+    tabOfficer?.addEventListener('click', () => {
+      tabOfficer.className = 'py-2.5 rounded-lg bg-surface-container text-primary font-bold uppercase transition-all flex items-center justify-center gap-1.5 shadow-sm';
+      tabAdmin.className = 'py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface font-semibold uppercase transition-all flex items-center justify-center gap-1.5';
+      contentOfficer?.classList.remove('hidden');
+      contentAdmin?.classList.add('hidden');
+    });
+
+    tabAdmin?.addEventListener('click', () => {
+      tabAdmin.className = 'py-2.5 rounded-lg bg-surface-container text-tertiary font-bold uppercase transition-all flex items-center justify-center gap-1.5 shadow-sm';
+      tabOfficer.className = 'py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface font-semibold uppercase transition-all flex items-center justify-center gap-1.5';
+      contentAdmin?.classList.remove('hidden');
+      contentOfficer?.classList.add('hidden');
+    });
+
+    // --- PASSWORD VISIBILITY TOGGLE ---
+    const togglePwBtn = document.getElementById('toggle-officer-pw-btn');
+    const pwInput = document.getElementById('login-officer-password');
+    const pwIcon = document.getElementById('officer-pw-icon');
+    togglePwBtn?.addEventListener('click', () => {
+      if (pwInput.type === 'password') {
+        pwInput.type = 'text';
+        if (pwIcon) pwIcon.textContent = 'visibility_off';
+      } else {
+        pwInput.type = 'password';
+        if (pwIcon) pwIcon.textContent = 'visibility';
+      }
+    });
+
+    // --- BORDER OFFICER LOGIN (NO SIGNUP - ANTI-FRAUD) ---
+    const officerForm = document.getElementById('officer-login-form');
+    const officerError = document.getElementById('officer-login-error');
+    const officerErrorText = document.getElementById('officer-login-error-text');
+    const officerLoginBtn = document.getElementById('btn-officer-login');
+
+    officerForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      officerError?.classList.add('hidden');
+      const officerId = document.getElementById('login-officer-id')?.value.trim();
+      const password = document.getElementById('login-officer-password')?.value;
+
+      if (officerLoginBtn) {
+        officerLoginBtn.disabled = true;
+        officerLoginBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Verifying Credentials...</span>';
+      }
+
+      const res = await AuthManager.loginOfficer(officerId, password);
+
+      if (officerLoginBtn) {
+        officerLoginBtn.disabled = false;
+        officerLoginBtn.innerHTML = '<span>Authenticate &amp; Open Console</span><span class="material-symbols-outlined text-[18px]">login</span>';
+      }
+
+      if (res.success) {
+        this.applyOfficerSession(res.officer);
+        this.showToast(`✅ Welcome, ${res.officer.fullName}`);
         this.navigateTo('dashboard');
-      });
-    }
+      } else {
+        if (officerErrorText) officerErrorText.textContent = res.error;
+        officerError?.classList.remove('hidden');
+      }
+    });
+
+    // --- ONE-CLICK DEMO ACCESS BUTTON ---
+    const demoBtn = document.getElementById('btn-quick-demo');
+    demoBtn?.addEventListener('click', async () => {
+      const demoOfficer = await AuthManager.loginDemoMode();
+      this.applyOfficerSession(demoOfficer);
+      this.showToast('⚡ Demo Mode Active: Welcome Inspector Rameshwar Singh');
+      this.navigateTo('dashboard');
+    });
+
+    // --- SECTOR COMMAND ADMIN LOGIN ---
+    const adminForm = document.getElementById('admin-login-form');
+    const adminError = document.getElementById('admin-login-error');
+    const adminErrorText = document.getElementById('admin-login-error-text');
+    const adminLoginBtn = document.getElementById('btn-admin-login');
+
+    adminForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      adminError?.classList.add('hidden');
+      const adminId = document.getElementById('login-admin-id')?.value.trim();
+      const password = document.getElementById('login-admin-password')?.value;
+
+      if (adminLoginBtn) {
+        adminLoginBtn.disabled = true;
+        adminLoginBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Verifying Authority...</span>';
+      }
+
+      const res = await AuthManager.loginAdmin(adminId, password);
+
+      if (adminLoginBtn) {
+        adminLoginBtn.disabled = false;
+        adminLoginBtn.innerHTML = '<span>Verify Authority &amp; Open Admin Console</span><span class="material-symbols-outlined text-[18px]">admin_panel_settings</span>';
+      }
+
+      if (res.success) {
+        this.showToast('🛡️ Sector Admin Authority Verified');
+        this.navigateTo('admin');
+      } else {
+        if (adminErrorText) adminErrorText.textContent = res.error;
+        adminError?.classList.remove('hidden');
+      }
+    });
+
+    // --- ADMIN CONSOLE LOGOUT & ADD OFFICER ---
+    const adminLogoutBtn = document.getElementById('admin-logout-btn');
+    adminLogoutBtn?.addEventListener('click', () => {
+      AuthManager.logout();
+      this.showToast('Exited Sector Admin Console');
+      this.navigateTo('login');
+    });
+
+    const addOfficerForm = document.getElementById('admin-add-officer-form');
+    const feedbackEl = document.getElementById('new-officer-feedback');
+    const addOfficerBtn = document.getElementById('btn-submit-new-officer');
+
+    addOfficerForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (feedbackEl) feedbackEl.className = 'hidden';
+
+      const name = document.getElementById('new-officer-name')?.value.trim();
+      const id = document.getElementById('new-officer-id')?.value.trim();
+      const rank = document.getElementById('new-officer-rank')?.value;
+      const cpSelect = document.getElementById('new-officer-checkpoint');
+      const checkpointId = cpSelect?.value;
+      const checkpointName = cpSelect?.options[cpSelect.selectedIndex]?.text;
+      const badgeNumber = document.getElementById('new-officer-badge')?.value.trim();
+      const pin = document.getElementById('new-officer-pin')?.value;
+
+      try {
+        if (addOfficerBtn) {
+          addOfficerBtn.disabled = true;
+          addOfficerBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Enrolling...</span>';
+        }
+
+        const created = await AuthManager.adminAddOfficer({
+          id,
+          fullName: name,
+          rank,
+          checkpointId,
+          checkpointName,
+          badgeNumber,
+          password: pin
+        });
+
+        if (feedbackEl) {
+          feedbackEl.className = 'p-3 rounded-xl bg-secondary/20 border border-secondary/50 text-secondary font-mono text-xs flex items-center gap-2';
+          feedbackEl.innerHTML = `<span class="material-symbols-outlined text-[18px]">verified</span><span>Officer <strong>${created.id}</strong> (${created.fullName}) enrolled successfully! Credentials ready for immediate checkpoint login.</span>`;
+        }
+
+        addOfficerForm.reset();
+        this.renderAdminRoster();
+        this.showToast(`✅ Enrolled ${created.id}`);
+      } catch (err) {
+        if (feedbackEl) {
+          feedbackEl.className = 'p-3 rounded-xl bg-error-container/30 border border-error/50 text-error font-mono text-xs flex items-center gap-2';
+          feedbackEl.innerHTML = `<span class="material-symbols-outlined text-[18px]">error</span><span>${err.message}</span>`;
+        }
+      } finally {
+        if (addOfficerBtn) {
+          addOfficerBtn.disabled = false;
+          addOfficerBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">verified</span><span>Enroll Officer into Database</span>';
+        }
+      }
+    });
 
     // Dashboard quick triggers
     const dashScanBtn = document.getElementById('dash-scan-btn');
