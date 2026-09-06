@@ -530,3 +530,42 @@ def toggle_officer_status(officer_id: str):
         cur.execute("UPDATE officers SET status = ? WHERE UPPER(officer_id) = UPPER(?)", (new_status, officer_id.strip()))
         return {"officer_id": officer_id, "status": new_status}
 
+
+def reset_officer_password(officer_id: str, new_password: str):
+    """Admin resets an officer's terminal PIN/password."""
+    import hashlib
+    pw_hash = hashlib.sha256(new_password.encode()).hexdigest()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("UPDATE officers SET password_hash = ? WHERE UPPER(officer_id) = UPPER(?)", (pw_hash, officer_id.strip()))
+        return {"officer_id": officer_id, "success": cur.rowcount > 0}
+
+
+def delete_officer(officer_id: str):
+    """Decommission and remove an officer from the database."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM officers WHERE UPPER(officer_id) = UPPER(?)", (officer_id.strip(),))
+        return {"officer_id": officer_id, "deleted": cur.rowcount > 0}
+
+
+def update_officer(officer_id: str, updates: dict):
+    """Update officer rank, checkpoint, or badge details."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE officers
+            SET full_name = COALESCE(?, full_name),
+                rank = COALESCE(?, rank),
+                checkpoint_id = COALESCE(?, checkpoint_id),
+                badge_number = COALESCE(?, badge_number)
+            WHERE UPPER(officer_id) = UPPER(?)
+        """, (
+            updates.get("full_name"),
+            updates.get("rank"),
+            updates.get("checkpoint_id"),
+            updates.get("badge_number"),
+            officer_id.strip()
+        ))
+        return {"officer_id": officer_id, "updated": cur.rowcount > 0}
+
