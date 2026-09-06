@@ -245,19 +245,19 @@ export class AuthManager {
 
   /**
    * One-Click Demo Mode Access
-   * Explicitly sets up a sandbox demo session with demo identifiers
+   * Sets up a dedicated sandbox demo session with demo identifiers (NOT a real officer serial ID).
    */
   static async loginDemoMode() {
     await this.initDatabase();
     const demoOfficer = {
-      id: 'DEMO-04-SANDBOX',
-      officer_id: 'DEMO-04-SANDBOX',
-      fullName: 'Inspector Rameshwar Singh',
-      rank: 'Inspector / Screening Lead (Demo)',
+      id: 'DEMO-OFFICER-01',
+      officer_id: 'DEMO-OFFICER-01',
+      fullName: 'Demo Screening Officer',
+      rank: 'Trainee / Demo Sandbox Lead',
       checkpointId: 'CP-04-DEMO',
-      checkpointName: 'Checkpoint CP-04 (Demo Sandbox)',
-      badgeNumber: 'DEMO-441',
-      shift: '06:00 - 14:00 (Alpha Demo)',
+      checkpointName: 'Virtual Border Checkpoint CP-04 (Demo Sandbox)',
+      badgeNumber: 'DEMO-SANDBOX-01',
+      shift: '24/7 Sandbox Simulation',
       status: 'ACTIVE',
       role: 'OFFICER',
       isDemo: true
