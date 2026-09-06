@@ -234,15 +234,31 @@
             <span>Try Demo Mode (Insp. R. Singh · CP-04)</span>
           </button>
 
-          <!-- Demo Credentials Helper Accordion -->
-          <div class="p-2.5 rounded-xl bg-surface-container-highest/40 border border-outline/10 flex flex-col gap-1 font-mono text-[11px] text-on-surface-variant">
-            <div class="flex items-center justify-between text-outline">
-              <span>PRE-CONFIGURED DEMO CREDENTIALS:</span>
-              <span class="text-secondary font-semibold">READY</span>
+          <!-- Enrolled Border Officers Quick-Fill Helper -->
+          <div class="p-3 rounded-xl bg-surface-container-highest/60 border border-outline/20 flex flex-col gap-2 font-mono text-[11px] text-on-surface-variant">
+            <div class="flex items-center justify-between text-outline pb-1 border-b border-outline/10">
+              <span class="font-bold text-secondary uppercase tracking-wider">Enrolled Border Officers (All PIN: 882194)</span>
+              <span class="text-primary text-[10px]">CLICK TO SELECT</span>
             </div>
-            <div class="flex items-center justify-between">
-              <span>ID: <code class="text-primary font-bold">SSB-7489-N</code></span>
-              <span>PIN: <code class="text-primary font-bold">882194</code></span>
+            <div class="grid grid-cols-1 gap-1.5 text-[11px]">
+              <div class="flex items-center justify-between p-1 rounded hover:bg-surface-container transition-colors">
+                <span>Insp. Rameshwar Singh</span>
+                <button type="button" onclick="document.getElementById('login-officer-id').value='SSB-7489-N'; document.getElementById('login-officer-password').value='882194';" class="px-2 py-0.5 rounded bg-primary/15 text-primary font-bold text-[10px] hover:bg-primary/25 transition-all">
+                  Use SSB-7489-N
+                </button>
+              </div>
+              <div class="flex items-center justify-between p-1 rounded hover:bg-surface-container transition-colors">
+                <span>Sub-Insp. Ananya Verma</span>
+                <button type="button" onclick="document.getElementById('login-officer-id').value='SSB-5521-N'; document.getElementById('login-officer-password').value='882194';" class="px-2 py-0.5 rounded bg-primary/15 text-primary font-bold text-[10px] hover:bg-primary/25 transition-all">
+                  Use SSB-5521-N
+                </button>
+              </div>
+              <div class="flex items-center justify-between p-1 rounded hover:bg-surface-container transition-colors">
+                <span>ASI Vikram Adhikari</span>
+                <button type="button" onclick="document.getElementById('login-officer-id').value='SSB-9204-N'; document.getElementById('login-officer-password').value='882194';" class="px-2 py-0.5 rounded bg-primary/15 text-primary font-bold text-[10px] hover:bg-primary/25 transition-all">
+                  Use SSB-9204-N
+                </button>
+              </div>
             </div>
           </div>
         </form>
