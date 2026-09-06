@@ -42,3 +42,8 @@ test_*.js
 # Documentation artifacts (non-project)
 sih-all-documents.txt
 implementation_plan.md
+
+# Real-time deployment status
+deployment_status.json
+live_version.json
+
