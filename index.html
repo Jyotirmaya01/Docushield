@@ -880,6 +880,122 @@
       </button>
     </section>
 
+    <!-- SCREEN 10: SECTOR ADMIN COMMAND CONSOLE & OFFICER PROVISIONING -->
+    <section id="screen-admin" class="screen-view hidden w-full flex flex-col pt-20 pb-24 px-space-base gap-space-base max-w-5xl mx-auto">
+      
+      <!-- Admin Command Header Banner -->
+      <div class="w-full bg-surface-container-low rounded-2xl p-space-base border border-tertiary/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-tertiary/20 text-tertiary flex items-center justify-center flex-shrink-0 border border-tertiary/40">
+            <span class="material-symbols-outlined text-[28px]">admin_panel_settings</span>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-[10px] uppercase font-bold text-tertiary">SECTOR COMMAND HQ · LEVEL 5</span>
+              <span class="px-2 py-0.5 rounded-full bg-secondary/20 text-secondary font-mono text-[9px] font-bold">ADMIN ACTIVE</span>
+            </div>
+            <h1 class="text-lg font-bold text-on-surface mt-0.5">Officer Enrollment &amp; Credential Registry</h1>
+            <p class="text-xs text-on-surface-variant font-mono">Indo-Nepal Tactical Command · Master Authority: Sector Commander</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" id="admin-logout-btn" class="px-3.5 py-2 rounded-xl bg-surface-container-highest hover:bg-surface-container text-on-surface font-mono text-xs uppercase font-semibold border border-outline/20 flex items-center gap-1.5 transition-all">
+            <span class="material-symbols-outlined text-[16px]">logout</span>
+            <span>Exit Admin</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Responsive Grid: Form on Left, Roster on Right -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 w-full">
+        
+        <!-- Left: Enroll New Officer Form (5 cols) -->
+        <div class="lg:col-span-5 flex flex-col gap-3">
+          <div class="bg-surface-container rounded-2xl p-5 border border-surface-container-high shadow-xl flex flex-col gap-4">
+            
+            <div class="flex items-center gap-2 pb-2 border-b border-surface-container-highest">
+              <span class="material-symbols-outlined text-primary text-[20px]">person_add</span>
+              <h2 class="font-bold text-sm uppercase tracking-wide text-on-surface">Enroll New Border Officer</h2>
+            </div>
+            <p class="text-[11px] text-on-surface-variant font-mono">Provision authentic credentials. Once enrolled, the officer can immediately log in at any border checkpoint terminal.</p>
+
+            <form id="admin-add-officer-form" class="flex flex-col gap-3">
+              <div class="flex flex-col gap-1">
+                <label class="font-mono text-[11px] uppercase text-on-surface-variant">Officer Full Name</label>
+                <input type="text" id="new-officer-name" placeholder="e.g. Sub-Insp. Priya Adhikari" class="w-full h-11 px-3 bg-surface-container-highest rounded-xl text-on-surface font-mono text-xs focus:outline-none border border-outline/20 focus:border-primary" required>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2">
+                <div class="flex flex-col gap-1">
+                  <label class="font-mono text-[11px] uppercase text-on-surface-variant">Officer Serial ID</label>
+                  <input type="text" id="new-officer-id" placeholder="SSB-6012-N" class="w-full h-11 px-3 bg-surface-container-highest rounded-xl text-on-surface font-mono text-xs uppercase focus:outline-none border border-outline/20 focus:border-primary" required>
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="font-mono text-[11px] uppercase text-on-surface-variant">Rank / Role</label>
+                  <select id="new-officer-rank" class="w-full h-11 px-3 bg-surface-container-highest rounded-xl text-on-surface font-mono text-xs focus:outline-none border border-outline/20 focus:border-primary">
+                    <option value="Inspector / Screening Lead">Inspector</option>
+                    <option value="Sub-Inspector / Screener" selected>Sub-Inspector</option>
+                    <option value="Head Constable / Verifier">Head Constable</option>
+                    <option value="Forensic Document Analyst">Forensic Specialist</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2">
+                <div class="flex flex-col gap-1">
+                  <label class="font-mono text-[11px] uppercase text-on-surface-variant">Checkpoint Station</label>
+                  <select id="new-officer-checkpoint" class="w-full h-11 px-3 bg-surface-container-highest rounded-xl text-on-surface font-mono text-xs focus:outline-none border border-outline/20 focus:border-primary">
+                    <option value="CP-04-NORTH">CP-04 (Panitanki)</option>
+                    <option value="CP-02-CENTRAL">CP-02 (Raxaul)</option>
+                    <option value="CP-01-WEST">CP-01 (Birgunj)</option>
+                    <option value="CP-08-EAST">CP-08 (Kakrahwa)</option>
+                  </select>
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="font-mono text-[11px] uppercase text-on-surface-variant">Badge Number</label>
+                  <input type="text" id="new-officer-badge" placeholder="SSB-VET-890" class="w-full h-11 px-3 bg-surface-container-highest rounded-xl text-on-surface font-mono text-xs uppercase focus:outline-none border border-outline/20 focus:border-primary">
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-1">
+                <label class="font-mono text-[11px] uppercase text-on-surface-variant">Initial Terminal PIN / Password</label>
+                <input type="password" id="new-officer-pin" placeholder="Create PIN or password" class="w-full h-11 px-3 bg-surface-container-highest rounded-xl text-on-surface font-mono text-xs focus:outline-none border border-outline/20 focus:border-primary" required>
+              </div>
+
+              <div id="new-officer-feedback" class="p-2.5 rounded-xl font-mono text-xs hidden"></div>
+
+              <button type="submit" id="btn-submit-new-officer" class="w-full py-3 rounded-xl bg-primary text-on-primary font-bold text-xs uppercase tracking-wider hover:bg-primary/90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg mt-1">
+                <span class="material-symbols-outlined text-[18px]">verified</span>
+                <span>Enroll Officer into Database</span>
+              </button>
+            </form>
+
+          </div>
+        </div>
+
+        <!-- Right: Active Checkpoint Officer Roster (7 cols) -->
+        <div class="lg:col-span-7 flex flex-col gap-3">
+          <div class="bg-surface-container rounded-2xl p-5 border border-surface-container-high shadow-xl flex flex-col gap-4">
+            
+            <div class="flex items-center justify-between pb-2 border-b border-surface-container-highest">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-secondary text-[20px]">groups</span>
+                <h2 class="font-bold text-sm uppercase tracking-wide text-on-surface">Registered Border Officers Roster</h2>
+              </div>
+              <span id="admin-roster-count" class="font-mono text-xs px-2 py-0.5 rounded bg-surface-container-highest text-primary">2 Enrolled</span>
+            </div>
+
+            <div id="admin-officers-list" class="flex flex-col gap-2.5 max-h-[560px] overflow-y-auto pr-1">
+              <!-- Dynamically populated roster items -->
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
     <!-- BOTTOM TACTICAL NAVIGATION DOCK -->
     <nav id="app-navigation" class="fixed bottom-0 w-full z-40 bg-surface/90 backdrop-blur-xl border-t border-surface-container-high">
       <div class="h-16 px-space-xs flex items-center justify-around">
