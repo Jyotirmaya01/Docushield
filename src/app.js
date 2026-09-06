@@ -1419,6 +1419,191 @@ class DocuShieldApp {
       }
     });
 
+    // --- ADMIN NAVIGATION, SUB-TABS & DIRECTIVES ---
+    const adminToTerminalBtn = document.getElementById('admin-to-terminal-btn');
+    adminToTerminalBtn?.addEventListener('click', () => {
+      this.navigateTo('dashboard');
+    });
+
+    const profileOpenAdminBtn = document.getElementById('btn-profile-open-admin');
+    profileOpenAdminBtn?.addEventListener('click', () => {
+      this.navigateTo('admin');
+    });
+
+    // Sub-Tabs
+    const tabRosterBtn = document.getElementById('btn-admin-tab-roster');
+    const tabPoliciesBtn = document.getElementById('btn-admin-tab-policies');
+    const tabAuditBtn = document.getElementById('btn-admin-tab-audit');
+
+    const secRoster = document.getElementById('admin-section-roster');
+    const secPolicies = document.getElementById('admin-section-policies');
+    const secAudit = document.getElementById('admin-section-audit');
+
+    const setAdminSubTab = (activeTab) => {
+      const activeClass = 'py-2.5 rounded-lg bg-surface-container text-tertiary font-bold uppercase transition-all flex items-center justify-center gap-1.5 shadow-sm';
+      const inactiveClass = 'py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface font-semibold uppercase transition-all flex items-center justify-center gap-1.5';
+
+      if (tabRosterBtn) tabRosterBtn.className = activeTab === 'roster' ? activeClass : inactiveClass;
+      if (tabPoliciesBtn) tabPoliciesBtn.className = activeTab === 'policies' ? activeClass : inactiveClass;
+      if (tabAuditBtn) tabAuditBtn.className = activeTab === 'audit' ? activeClass : inactiveClass;
+
+      secRoster?.classList.toggle('hidden', activeTab !== 'roster');
+      secPolicies?.classList.toggle('hidden', activeTab !== 'policies');
+      secAudit?.classList.toggle('hidden', activeTab !== 'audit');
+
+      if (activeTab === 'roster') this.renderAdminRoster();
+      if (activeTab === 'policies') this.renderAdminPolicies();
+      if (activeTab === 'audit') this.renderAdminAudit();
+    };
+
+    tabRosterBtn?.addEventListener('click', () => setAdminSubTab('roster'));
+    tabPoliciesBtn?.addEventListener('click', () => setAdminSubTab('policies'));
+    tabAuditBtn?.addEventListener('click', () => setAdminSubTab('audit'));
+
+    // Search & Filter
+    const adminSearchInput = document.getElementById('admin-search-input');
+    adminSearchInput?.addEventListener('input', () => this.renderAdminRoster());
+
+    const adminFilterStatus = document.getElementById('admin-filter-status');
+    adminFilterStatus?.addEventListener('change', () => this.renderAdminRoster());
+
+    // Export Buttons
+    document.getElementById('btn-export-json')?.addEventListener('click', () => {
+      AuthManager.exportOfficersJSON();
+      this.showToast('📁 Exported Officers Directory (JSON)');
+    });
+
+    document.getElementById('btn-export-csv')?.addEventListener('click', () => {
+      AuthManager.exportOfficersCSV();
+      this.showToast('📊 Exported Officers Directory (CSV)');
+    });
+
+    // Threat Choice Selector
+    let chosenThreat = 'ALPHA';
+    document.querySelectorAll('.btn-threat-choice').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        chosenThreat = e.currentTarget.dataset.threat;
+        document.querySelectorAll('.btn-threat-choice').forEach(b => {
+          const isSelected = b.dataset.threat === chosenThreat;
+          const icon = b.querySelector('.material-symbols-outlined');
+          if (isSelected) {
+            if (chosenThreat === 'ALPHA') b.className = 'btn-threat-choice p-4 rounded-xl border text-left flex flex-col gap-1.5 transition-all bg-secondary/15 border-secondary text-secondary';
+            if (chosenThreat === 'BRAVO') b.className = 'btn-threat-choice p-4 rounded-xl border text-left flex flex-col gap-1.5 transition-all bg-tertiary/15 border-tertiary text-tertiary';
+            if (chosenThreat === 'CHARLIE') b.className = 'btn-threat-choice p-4 rounded-xl border text-left flex flex-col gap-1.5 transition-all bg-error-container/30 border-error text-error';
+            if (icon) { icon.textContent = 'check_circle'; icon.className = 'material-symbols-outlined text-[20px]'; }
+          } else {
+            b.className = 'btn-threat-choice p-4 rounded-xl border text-left flex flex-col gap-1.5 transition-all bg-surface-container-highest/50 border-outline/20 hover:border-outline/40 text-on-surface';
+            if (icon) { icon.textContent = 'radio_button_unchecked'; icon.className = 'material-symbols-outlined text-[20px] text-outline'; }
+          }
+        });
+      });
+    });
+
+    // Save Policies
+    const btnSavePolicies = document.getElementById('btn-save-policies');
+    btnSavePolicies?.addEventListener('click', () => {
+      const dualBiometrics = document.getElementById('policy-dual-biometrics')?.checked;
+      const strictUv = document.getElementById('policy-strict-uv')?.checked;
+      const autoFlagInterpol = document.getElementById('policy-interpol-flag')?.checked;
+      const lockdownMode = document.getElementById('policy-lockdown-mode')?.checked;
+      const alertMessage = document.getElementById('policy-alert-message')?.value;
+
+      AuthManager.updateSectorConfig({
+        threatLevel: chosenThreat,
+        dualBiometrics,
+        strictUv,
+        autoFlagInterpol,
+        lockdownMode,
+        alertMessage
+      });
+
+      const savedToast = document.getElementById('policies-saved-toast');
+      if (savedToast) {
+        savedToast.classList.remove('hidden');
+        setTimeout(() => savedToast.classList.add('hidden'), 3500);
+      }
+
+      this.showToast(`🛡️ Threat Level ${chosenThreat} applied across sector!`);
+      this.renderAdminRoster();
+      this.renderAdminAudit();
+    });
+
+    // Refresh Audit Log
+    document.getElementById('btn-refresh-audit')?.addEventListener('click', () => {
+      this.renderAdminAudit();
+      this.showToast('Audit journal refreshed');
+    });
+
+    // Reset PIN Form & Modal
+    const modalResetPin = document.getElementById('modal-reset-pin');
+    const formResetPin = document.getElementById('form-reset-pin');
+    const closeResetModal = () => modalResetPin?.classList.add('hidden');
+
+    document.getElementById('btn-close-reset-modal')?.addEventListener('click', closeResetModal);
+    document.getElementById('btn-cancel-reset')?.addEventListener('click', closeResetModal);
+
+    formResetPin?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const targetId = document.getElementById('reset-modal-target-id')?.value;
+      const newPin = document.getElementById('reset-modal-new-pin')?.value;
+      const feedback = document.getElementById('reset-modal-feedback');
+
+      try {
+        await AuthManager.resetOfficerPin(targetId, newPin);
+        if (feedback) {
+          feedback.className = 'p-2.5 rounded-xl bg-secondary/20 text-secondary font-mono text-xs flex items-center gap-1.5';
+          feedback.innerHTML = `<span class="material-symbols-outlined text-[16px]">check</span><span>PIN updated successfully for ${targetId}!</span>`;
+        }
+        setTimeout(() => {
+          closeResetModal();
+          this.renderAdminRoster();
+          this.renderAdminAudit();
+          this.showToast(`🔑 PIN reset complete for ${targetId}`);
+        }, 1200);
+      } catch (err) {
+        if (feedback) {
+          feedback.className = 'p-2.5 rounded-xl bg-error-container/30 text-error font-mono text-xs';
+          feedback.textContent = err.message;
+        }
+      }
+    });
+
+    // Edit Officer Form & Modal
+    const modalEditOfficer = document.getElementById('modal-edit-officer');
+    const formEditOfficer = document.getElementById('form-edit-officer');
+    const closeEditModal = () => modalEditOfficer?.classList.add('hidden');
+
+    document.getElementById('btn-close-edit-modal')?.addEventListener('click', closeEditModal);
+    document.getElementById('btn-cancel-edit')?.addEventListener('click', closeEditModal);
+
+    formEditOfficer?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const targetId = document.getElementById('edit-modal-target-id')?.value;
+      const fullName = document.getElementById('edit-modal-name')?.value;
+      const rank = document.getElementById('edit-modal-rank')?.value;
+      const cpSelect = document.getElementById('edit-modal-checkpoint');
+      const checkpointId = cpSelect?.value;
+      const checkpointName = cpSelect?.options[cpSelect.selectedIndex]?.text;
+      const badgeNumber = document.getElementById('edit-modal-badge')?.value;
+
+      try {
+        AuthManager.updateOfficer(targetId, {
+          fullName,
+          rank,
+          checkpointId,
+          checkpointName,
+          badgeNumber
+        });
+
+        closeEditModal();
+        this.renderAdminRoster();
+        this.renderAdminAudit();
+        this.showToast(`Updated details for Officer ${targetId}`);
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+
     // Dashboard quick triggers
     const dashScanBtn = document.getElementById('dash-scan-btn');
     if (dashScanBtn) {
