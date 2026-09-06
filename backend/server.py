@@ -39,6 +39,9 @@ from database import (
     get_all_officers,
     insert_officer,
     toggle_officer_status,
+    reset_officer_password,
+    delete_officer,
+    update_officer,
 )
 
 
