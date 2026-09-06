@@ -1,0 +1,23 @@
+# ==============================================================================
+# DocuShield - Code Owners Configuration
+# Every pull request, edit, and push across the entire repository requires
+# mandatory review and explicit approval by @Jyotirmaya01 before merging into main.
+# ==============================================================================
+
+# Entire codebase requires review & approval by project lead:
+* @Jyotirmaya01
+
+# Core application files
+/index.html @Jyotirmaya01
+/styles.css @Jyotirmaya01
+/src/ @Jyotirmaya01
+/src/auth/ @Jyotirmaya01
+
+# Backend and database
+/backend/ @Jyotirmaya01
+
+# Configuration and workflows
+/.github/ @Jyotirmaya01
+/auto_sync.py @Jyotirmaya01
+/sw.js @Jyotirmaya01
+/manifest.json @Jyotirmaya01
