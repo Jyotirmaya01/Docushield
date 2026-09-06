@@ -1,4 +1,4 @@
-const CACHE_NAME = 'docushield-v2';
+const CACHE_NAME = 'docushield-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -14,7 +14,12 @@ const ASSETS_TO_CACHE = [
   './src/pipeline/forensicEngine.js',
   './src/api/backendClient.js',
   './src/app.js',
-  './assets/logo.svg'
+  './assets/logo.svg',
+  './assets/icon-192.png',
+  './assets/icon-512.png',
+  './assets/icon-maskable-192.png',
+  './assets/icon-maskable-512.png',
+  './assets/apple-touch-icon.png'
 ];
 
 // Install — cache all core assets for offline use

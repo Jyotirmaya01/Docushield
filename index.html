@@ -115,6 +115,10 @@
           </div>
         </div>
         <div class="flex items-center gap-space-sm">
+          <button type="button" id="btn-open-install-modal" aria-label="Download App or Scan QR" title="Install App / Scan QR" class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest border border-primary/40 text-primary font-mono text-[10px] uppercase font-bold transition-all shadow-sm active:scale-95">
+            <span class="material-symbols-outlined text-[15px]">qr_code_scanner</span>
+            <span class="hidden sm:inline">Get App</span>
+          </button>
           <div class="sync-state-badge flex items-center gap-space-xs px-2.5 py-1 rounded bg-surface-container-high">
             <span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
             <span class="font-mono text-[10px] text-secondary uppercase font-semibold">STORE &amp; FORWARD</span>
@@ -813,6 +817,81 @@
       </div>
     </div>
 
+    <!-- INSTALL & QR CODE SHARE MODAL -->
+    <div id="install-qr-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+      <div class="bg-surface-container rounded-3xl p-5 sm:p-6 max-w-md w-full border border-primary/40 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-surface-container-high pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-surface-container-high border border-primary/30 flex items-center justify-center">
+              <img src="./assets/logo.svg" alt="" class="h-5 w-auto">
+            </div>
+            <div>
+              <h3 class="font-extrabold text-sm uppercase tracking-wide text-on-surface">Install DocuShield</h3>
+              <p class="text-[11px] font-mono text-secondary">Offline PWA · Border Command</p>
+            </div>
+          </div>
+          <button type="button" id="install-qr-modal-close" aria-label="Close" class="w-8 h-8 rounded-lg bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-outline hover:text-on-surface transition-colors">
+            <span class="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        <!-- QR Code Display -->
+        <div class="flex flex-col items-center gap-2.5 pt-1">
+          <div class="relative bg-white p-3 rounded-2xl shadow-xl overflow-hidden border-2 border-primary/20">
+            <img id="modal-qr-img" src="" alt="Scan QR Code to Open/Install DocuShield" class="w-44 h-44 sm:w-48 sm:h-48 object-contain">
+            <div class="scan-line absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-secondary to-transparent pointer-events-none"></div>
+          </div>
+          <p class="font-mono text-[11px] text-on-surface-variant text-center flex items-center gap-1">
+            <span class="material-symbols-outlined text-secondary text-[14px]">photo_camera</span>
+            <span>Scan with any phone camera to install instantly</span>
+          </p>
+        </div>
+
+        <!-- Share / Copy Link -->
+        <div class="flex items-center gap-2 p-2 rounded-xl bg-surface-container-high border border-outline/20">
+          <span class="material-symbols-outlined text-primary text-[18px] ml-1">link</span>
+          <input type="text" id="modal-share-link" readonly class="flex-1 bg-transparent text-xs font-mono text-on-surface truncate focus:outline-none select-all" value="">
+          <button type="button" id="modal-copy-link-btn" class="px-3 py-1.5 rounded-lg bg-primary text-on-primary font-mono text-[11px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all flex items-center gap-1 flex-shrink-0">
+            <span class="material-symbols-outlined text-[14px]" id="modal-copy-icon">content_copy</span>
+            <span id="modal-copy-text">Copy</span>
+          </button>
+        </div>
+
+        <!-- Direct Install Action -->
+        <button type="button" id="modal-direct-install-btn" class="w-full py-3 rounded-xl bg-gradient-to-r from-primary to-secondary text-on-primary font-bold text-xs uppercase tracking-wider hover:opacity-95 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg">
+          <span class="material-symbols-outlined text-[20px]">download</span>
+          <span>Install App to This Device</span>
+        </button>
+
+        <!-- Quick Platform Guide -->
+        <div class="grid grid-cols-3 gap-2 text-center pt-2 border-t border-surface-container-high font-mono text-[10px]">
+          <div class="p-2 rounded-lg bg-surface-container-high/60 border border-outline/10">
+            <div class="text-primary font-bold">Android</div>
+            <div class="text-on-surface-variant mt-0.5">Chrome > Install app</div>
+          </div>
+          <div class="p-2 rounded-lg bg-surface-container-high/60 border border-outline/10">
+            <div class="text-primary font-bold">iOS / iPhone</div>
+            <div class="text-on-surface-variant mt-0.5">Safari > Share > Add</div>
+          </div>
+          <div class="p-2 rounded-lg bg-surface-container-high/60 border border-outline/10">
+            <div class="text-primary font-bold">PC / Mac</div>
+            <div class="text-on-surface-variant mt-0.5">Address bar > ⤓</div>
+          </div>
+        </div>
+
+        <!-- Standalone Page Link -->
+        <div class="text-center pt-1">
+          <a href="./install.html" class="font-mono text-xs text-primary hover:text-secondary underline underline-offset-2 transition-colors inline-flex items-center gap-1">
+            <span>Open Dedicated Download Page</span>
+            <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+          </a>
+        </div>
+
+      </div>
+    </div>
+
     <!-- FLOATING TOAST NOTIFICATION -->
     <div id="app-toast" class="fixed top-20 left-4 right-4 max-w-md lg:max-w-lg mx-auto z-50 p-3 rounded-xl bg-surface-container-highest text-on-surface border border-secondary/60 text-xs font-mono shadow-2xl transition-all duration-300 transform opacity-0 translate-y-4 pointer-events-none flex items-center gap-2">
       <span class="material-symbols-outlined text-secondary text-[18px]">verified</span>
@@ -856,11 +935,116 @@
       });
     }
 
-    // PWA Install Prompt
+    // PWA Install Prompt & QR Modal Controller
     let deferredInstallPrompt = null;
     const banner = document.getElementById('pwa-install-banner');
     const acceptBtn = document.getElementById('pwa-install-accept');
     const dismissBtn = document.getElementById('pwa-install-dismiss');
+
+    // Install / QR Modal Elements
+    const openInstallModalBtn = document.getElementById('btn-open-install-modal');
+    const installQrModal = document.getElementById('install-qr-modal');
+    const installQrModalClose = document.getElementById('install-qr-modal-close');
+    const modalQrImg = document.getElementById('modal-qr-img');
+    const modalShareLink = document.getElementById('modal-share-link');
+    const modalCopyLinkBtn = document.getElementById('modal-copy-link-btn');
+    const modalCopyText = document.getElementById('modal-copy-text');
+    const modalCopyIcon = document.getElementById('modal-copy-icon');
+    const modalDirectInstallBtn = document.getElementById('modal-direct-install-btn');
+
+    // Compute active app URL
+    function getAppUrl() {
+      try {
+        let base = window.location.href.split('?')[0].split('#')[0];
+        if (!base.endsWith('/')) {
+          base = base.substring(0, base.lastIndexOf('/') + 1);
+        }
+        return base;
+      } catch (e) {
+        return window.location.href;
+      }
+    }
+
+    function initQrModal() {
+      const appUrl = getAppUrl();
+      if (modalShareLink) modalShareLink.value = appUrl;
+      if (modalQrImg) {
+        modalQrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(appUrl)}&bgcolor=ffffff&color=111415&format=png`;
+      }
+    }
+
+    function openModal() {
+      initQrModal();
+      if (installQrModal) {
+        installQrModal.classList.remove('hidden');
+      }
+    }
+
+    function closeModal() {
+      if (installQrModal) {
+        installQrModal.classList.add('hidden');
+      }
+    }
+
+    openInstallModalBtn?.addEventListener('click', openModal);
+    installQrModalClose?.addEventListener('click', closeModal);
+    installQrModal?.addEventListener('click', (e) => {
+      if (e.target === installQrModal) closeModal();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && installQrModal && !installQrModal.classList.contains('hidden')) {
+        closeModal();
+      }
+    });
+
+    // Copy link handler
+    modalCopyLinkBtn?.addEventListener('click', async () => {
+      const appUrl = getAppUrl();
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(appUrl);
+        } else {
+          modalShareLink.select();
+          document.execCommand('copy');
+        }
+        if (modalCopyText) modalCopyText.textContent = 'Copied!';
+        if (modalCopyIcon) modalCopyIcon.textContent = 'check';
+        modalCopyLinkBtn.classList.add('bg-secondary', 'text-on-secondary');
+        modalCopyLinkBtn.classList.remove('bg-primary', 'text-on-primary');
+
+        setTimeout(() => {
+          if (modalCopyText) modalCopyText.textContent = 'Copy';
+          if (modalCopyIcon) modalCopyIcon.textContent = 'content_copy';
+          modalCopyLinkBtn.classList.remove('bg-secondary', 'text-on-secondary');
+          modalCopyLinkBtn.classList.add('bg-primary', 'text-on-primary');
+        }, 2500);
+      } catch (err) {
+        console.warn('Could not copy link:', err);
+      }
+    });
+
+    // Direct install button in modal
+    modalDirectInstallBtn?.addEventListener('click', async () => {
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        const result = await deferredInstallPrompt.userChoice;
+        if (result.outcome === 'accepted') {
+          modalDirectInstallBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">check</span><span>App Installed!</span>';
+          modalDirectInstallBtn.classList.add('opacity-70');
+          modalDirectInstallBtn.disabled = true;
+          hideBanner();
+        }
+        deferredInstallPrompt = null;
+      } else {
+        // Already installed or browser handles via menu
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+          alert('DocuShield is already installed and running as a standalone app.');
+        } else {
+          alert('To install on this device:\n• Chrome/Edge: Click the install icon (⤓) in the address bar or Menu > Install App\n• Safari (iOS): Tap Share > Add to Home Screen');
+        }
+      }
+    });
 
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
@@ -869,7 +1053,7 @@
       setTimeout(() => {
         banner.classList.remove('translate-y-[200%]', 'opacity-0', 'pointer-events-none');
         banner.classList.add('translate-y-0', 'opacity-100', 'pointer-events-auto');
-      }, 2000); // Delay 2s so user sees the app first
+      }, 2000);
     });
 
     acceptBtn?.addEventListener('click', async () => {
@@ -882,7 +1066,6 @@
 
     dismissBtn?.addEventListener('click', () => {
       hideBanner();
-      // Don't show again for 24h
       localStorage.setItem('pwa_install_dismissed', Date.now().toString());
     });
 
@@ -900,6 +1083,11 @@
 
     window.addEventListener('appinstalled', () => {
       hideBanner();
+      if (modalDirectInstallBtn) {
+        modalDirectInstallBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">check</span><span>App Installed!</span>';
+        modalDirectInstallBtn.classList.add('opacity-70');
+        modalDirectInstallBtn.disabled = true;
+      }
       console.log('DocuShield PWA installed successfully');
     });
   </script>

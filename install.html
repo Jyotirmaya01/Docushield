@@ -152,9 +152,26 @@
   <script>
     // Minimal QR code generator using canvas
     // Uses the QR code API as a fallback for clean rendering
-    const APP_URL = window.location.href.replace(/install\.html.*$/, '');
+    let APP_URL = window.location.href.replace(/install\.html.*$/, '');
+    if (!APP_URL.endsWith('/')) APP_URL += '/';
 
-    document.getElementById('app-url').textContent = APP_URL;
+    const urlDisplay = document.getElementById('app-url');
+    urlDisplay.textContent = APP_URL;
+    urlDisplay.title = 'Click to copy URL';
+    urlDisplay.addEventListener('click', async () => {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(APP_URL);
+          const original = urlDisplay.textContent;
+          urlDisplay.textContent = '✓ Link Copied to Clipboard!';
+          urlDisplay.classList.add('text-secondary');
+          setTimeout(() => {
+            urlDisplay.textContent = original;
+            urlDisplay.classList.remove('text-secondary');
+          }, 2000);
+        }
+      } catch (e) {}
+    });
 
     // Generate QR code using a free API
     const qrCanvas = document.getElementById('qr-canvas');
@@ -165,7 +182,6 @@
       ctx.drawImage(qrImg, 0, 0, 200, 200);
     };
     qrImg.onerror = function() {
-      // Fallback: show URL text if QR generation fails
       const ctx = qrCanvas.getContext('2d');
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, 200, 200);
