@@ -379,7 +379,7 @@ export class AuthManager {
     // Also sync to backend SQLite if available
     try {
       if (await BackendAPI.isAvailable()) {
-        await fetch('http://localhost:8000/api/admin/officers', {
+        await fetch(`${getApiBase()}/admin/officers`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -413,7 +413,7 @@ export class AuthManager {
 
       // Sync backend if available
       try {
-        fetch(`http://localhost:8000/api/admin/officers/${encodeURIComponent(officer.id)}/status`, {
+        fetch(`${getApiBase()}/admin/officers/${encodeURIComponent(officer.id)}/status`, {
           method: 'POST'
         }).catch(() => {});
       } catch {}
@@ -443,7 +443,7 @@ export class AuthManager {
 
     // Sync backend if available
     try {
-      fetch(`http://localhost:8000/api/admin/officers/${encodeURIComponent(officer.id)}/reset-pin`, {
+      fetch(`${getApiBase()}/admin/officers/${encodeURIComponent(officer.id)}/reset-pin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ new_pin: newPin })
@@ -469,7 +469,7 @@ export class AuthManager {
 
     // Sync backend if available
     try {
-      fetch(`http://localhost:8000/api/admin/officers/${encodeURIComponent(officerId)}`, {
+      fetch(`${getApiBase()}/admin/officers/${encodeURIComponent(officerId)}`, {
         method: 'DELETE'
       }).catch(() => {});
     } catch {}
@@ -499,7 +499,7 @@ export class AuthManager {
 
     // Sync backend if available
     try {
-      fetch(`http://localhost:8000/api/admin/officers/${encodeURIComponent(officer.id)}`, {
+      fetch(`${getApiBase()}/admin/officers/${encodeURIComponent(officer.id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
