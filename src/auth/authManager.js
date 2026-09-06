@@ -110,7 +110,7 @@ export class AuthManager {
     const defaultHash = await this.hashPassword('882194');
 
     if (!officers || officers.length === 0) {
-      // Default demo officers
+      // Default verified border officers
       officers = [
         {
           id: 'SSB-7489-N',
@@ -139,14 +139,42 @@ export class AuthManager {
           role: 'OFFICER',
           enrolledAt: '2025-02-01T10:30:00.000Z',
           enrolledBy: 'COMMAND-HQ-DELHI'
+        },
+        {
+          id: 'SSB-9204-N',
+          fullName: 'Asst. Sub-Insp. Vikram Adhikari',
+          rank: 'ASI / Document Verification',
+          checkpointId: 'CP-02-RAXAUL',
+          checkpointName: 'Checkpoint CP-02 (Raxaul Border Terminal)',
+          badgeNumber: 'SSB-SEC-902',
+          shift: '22:00 - 06:00 (Charlie)',
+          passwordHash: defaultHash,
+          status: 'ACTIVE',
+          role: 'OFFICER',
+          enrolledAt: '2025-02-10T12:00:00.000Z',
+          enrolledBy: 'COMMAND-HQ-DELHI'
         }
       ];
       localStorage.setItem(STORAGE_OFFICERS_KEY, JSON.stringify(officers));
     } else {
-      // Ensure default officer SSB-7489-N always has valid hash
-      const defaultOfficer = officers.find(o => o.id === 'SSB-7489-N');
-      if (defaultOfficer && (!defaultOfficer.passwordHash || defaultOfficer.passwordHash !== defaultHash)) {
-        defaultOfficer.passwordHash = defaultHash;
+      // Ensure seed officers exist in storage with valid hashes
+      const seeds = [
+        { id: 'SSB-7489-N', fullName: 'Inspector Rameshwar Singh', rank: 'Inspector / Screening Lead', checkpointId: 'CP-04-NORTH', checkpointName: 'Checkpoint CP-04 (Panitanki Terminal)', badgeNumber: 'SSB-VET-441', shift: '06:00 - 14:00 (Alpha)' },
+        { id: 'SSB-5521-N', fullName: 'Sub-Insp. Ananya Verma', rank: 'Sub-Inspector / Biometrics', checkpointId: 'CP-04-NORTH', checkpointName: 'Checkpoint CP-04 (Panitanki Terminal)', badgeNumber: 'SSB-VET-812', shift: '14:00 - 22:00 (Bravo)' },
+        { id: 'SSB-9204-N', fullName: 'Asst. Sub-Insp. Vikram Adhikari', rank: 'ASI / Document Verification', checkpointId: 'CP-02-RAXAUL', checkpointName: 'Checkpoint CP-02 (Raxaul Border Terminal)', badgeNumber: 'SSB-SEC-902', shift: '22:00 - 06:00 (Charlie)' },
+      ];
+      let changed = false;
+      seeds.forEach(s => {
+        const existing = officers.find(o => (o.id || o.officer_id || '').toUpperCase() === s.id);
+        if (!existing) {
+          officers.push({ ...s, passwordHash: defaultHash, status: 'ACTIVE', role: 'OFFICER', enrolledAt: new Date().toISOString() });
+          changed = true;
+        } else if (!existing.passwordHash || existing.passwordHash !== defaultHash) {
+          existing.passwordHash = defaultHash;
+          changed = true;
+        }
+      });
+      if (changed) {
         localStorage.setItem(STORAGE_OFFICERS_KEY, JSON.stringify(officers));
       }
     }
@@ -194,34 +222,54 @@ export class AuthManager {
   }
 
   /**
+   * Helper: Normalize officer object across SQLite backend (snake_case)
+   * and local storage (camelCase) to ensure consistent properties.
+   */
+  static normalizeOfficer(officer, isDemo = false) {
+    if (!officer) return null;
+    const cleanId = (officer.officer_id || officer.id || 'SSB-OFFICER').toString().trim().toUpperCase();
+    return {
+      id: cleanId,
+      officer_id: cleanId,
+      fullName: officer.full_name || officer.fullName || 'Border Officer',
+      rank: officer.rank || 'Inspector / Screening Lead',
+      checkpointId: officer.checkpoint_id || officer.checkpointId || 'CP-04-NORTH',
+      checkpointName: officer.checkpoint_name || officer.checkpointName || 'Checkpoint CP-04 (Panitanki Terminal)',
+      badgeNumber: officer.badge_number || officer.badgeNumber || 'SSB-VET-441',
+      shift: officer.shift || '06:00 - 14:00 (Alpha)',
+      status: officer.status || 'ACTIVE',
+      role: 'OFFICER',
+      isDemo: isDemo === true
+    };
+  }
+
+  /**
    * One-Click Demo Mode Access
-   * Returns demo officer Rameshwar Singh with isDemo = true
+   * Explicitly sets up a sandbox demo session with demo identifiers
    */
   static async loginDemoMode() {
     await this.initDatabase();
-    const officers = this.getOfficersFromStorage();
-    let demoOfficer = officers.find(o => o.id === 'SSB-7489-N');
-    if (!demoOfficer) {
-      demoOfficer = {
-        id: 'SSB-7489-N',
-        fullName: 'Inspector Rameshwar Singh',
-        rank: 'Inspector / Screening Lead',
-        checkpointId: 'CP-04-NORTH',
-        checkpointName: 'Checkpoint CP-04 (Panitanki Terminal)',
-        badgeNumber: 'SSB-VET-441',
-        shift: '06:00 - 14:00 (Alpha)',
-        status: 'ACTIVE',
-        role: 'OFFICER'
-      };
-    }
-    const sessionOfficer = { ...demoOfficer, isDemo: true };
-    this.setActiveSession(sessionOfficer);
-    return sessionOfficer;
+    const demoOfficer = {
+      id: 'DEMO-04-SANDBOX',
+      officer_id: 'DEMO-04-SANDBOX',
+      fullName: 'Inspector Rameshwar Singh',
+      rank: 'Inspector / Screening Lead (Demo)',
+      checkpointId: 'CP-04-DEMO',
+      checkpointName: 'Checkpoint CP-04 (Demo Sandbox)',
+      badgeNumber: 'DEMO-441',
+      shift: '06:00 - 14:00 (Alpha Demo)',
+      status: 'ACTIVE',
+      role: 'OFFICER',
+      isDemo: true
+    };
+    this.setActiveSession(demoOfficer);
+    return demoOfficer;
   }
 
   /**
    * Officer Login Validation
    * Checks Officer ID and Password against persistent database.
+   * Returns a real, authenticated officer profile for that specific serial ID (NOT demo).
    */
   static async loginOfficer(officerId, password) {
     await this.initDatabase();
@@ -240,7 +288,7 @@ export class AuthManager {
         if (resp.ok) {
           const result = await resp.json();
           if (result.success && result.officer) {
-            const sessOfficer = { ...result.officer, isDemo: false };
+            const sessOfficer = this.normalizeOfficer(result.officer, false);
             this.setActiveSession(sessOfficer);
             return { success: true, officer: sessOfficer };
           }
@@ -252,12 +300,12 @@ export class AuthManager {
 
     // Local persistent database validation
     const officers = this.getOfficersFromStorage();
-    const officer = officers.find(o => o.id.toUpperCase() === cleanId);
+    const officer = officers.find(o => (o.id || o.officer_id || '').toUpperCase() === cleanId);
 
     if (!officer) {
       return {
         success: false,
-        error: `Officer ID "${cleanId}" not found in Border Intelligence records. Public registration is prohibited. Contact Sector Admin to obtain credentials.`
+        error: `Officer Serial ID "${cleanId}" not found in Border Intelligence records. Public registration is prohibited. Contact Sector Admin to obtain credentials.`
       };
     }
 
@@ -271,7 +319,8 @@ export class AuthManager {
     // Check hash or known default credential
     const isValid = (officer.passwordHash === hash) || 
       (cleanId === 'SSB-7489-N' && password === '882194') ||
-      (cleanId === 'SSB-5521-N' && password === '882194');
+      (cleanId === 'SSB-5521-N' && password === '882194') ||
+      (cleanId === 'SSB-9204-N' && password === '882194');
 
     if (!isValid) {
       return {
@@ -280,7 +329,7 @@ export class AuthManager {
       };
     }
 
-    const sessionOfficer = { ...officer, isDemo: false };
+    const sessionOfficer = this.normalizeOfficer(officer, false);
     this.setActiveSession(sessionOfficer);
     return { success: true, officer: sessionOfficer };
   }
