@@ -129,12 +129,56 @@ class DocuShieldApp {
     try {
       const demoOfficer = await AuthManager.loginDemoMode();
       this.applyOfficerSession(demoOfficer, true);
-      this.showToast('⚡ Demo Mode Active: Welcome Insp. Rameshwar Singh');
+      this.showToast('⚡ Demo Officer Dashboard Active (Sandbox Mode)');
       this.navigateTo('dashboard');
     } catch (err) {
       console.error('Demo mode launch error:', err);
       this.showToast('Failed to start demo mode. Please try again.');
     }
+  }
+
+  async submitOfficerLogin(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const officerError = document.getElementById('officer-login-error');
+    const officerErrorText = document.getElementById('officer-login-error-text');
+    const officerLoginBtn = document.getElementById('btn-officer-login');
+    officerError?.classList.add('hidden');
+
+    const officerId = document.getElementById('login-officer-id')?.value.trim();
+    const password = document.getElementById('login-officer-password')?.value;
+
+    if (!officerId) {
+      if (officerErrorText) officerErrorText.textContent = 'Please enter your Officer Serial ID.';
+      officerError?.classList.remove('hidden');
+      return false;
+    }
+
+    if (officerLoginBtn) {
+      officerLoginBtn.disabled = true;
+      officerLoginBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Verifying Serial ID...</span>';
+    }
+
+    try {
+      const res = await AuthManager.loginOfficer(officerId, password);
+      if (res.success) {
+        this.applyOfficerSession(res.officer, false);
+        this.showToast(`✅ Terminal Unlocked: ${res.officer.fullName} (${res.officer.id})`);
+        this.navigateTo('dashboard');
+      } else {
+        if (officerErrorText) officerErrorText.textContent = res.error || 'Authentication rejected.';
+        officerError?.classList.remove('hidden');
+      }
+    } catch (err) {
+      console.error('Officer login error:', err);
+      if (officerErrorText) officerErrorText.textContent = 'Authentication service error. Check connection.';
+      officerError?.classList.remove('hidden');
+    } finally {
+      if (officerLoginBtn) {
+        officerLoginBtn.disabled = false;
+        officerLoginBtn.innerHTML = '<span>Authenticate &amp; Open Console</span><span class="material-symbols-outlined text-[18px]">login</span>';
+      }
+    }
+    return false;
   }
 
   logoutOfficer() {
