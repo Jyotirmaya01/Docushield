@@ -309,10 +309,14 @@
 
     <!-- SCREEN 2: HOME DASHBOARD -->
     <section id="screen-dashboard" class="screen-view hidden w-full flex flex-col pt-20 pb-24 px-space-base gap-space-base">
+      
+      <!-- Session Indicator Banner (Demo vs Authenticated Officer) -->
+      <div id="dash-session-banner" class="w-full hidden"></div>
+
       <!-- Officer Operational Status Card -->
       <div class="w-full bg-surface-container-low rounded-2xl p-space-base border border-surface-container-high flex flex-col gap-space-sm shadow-sm">
         <div class="flex items-center justify-between pb-1 border-b border-surface-container-highest/50">
-          <div class="flex items-center gap-1.5">
+          <div id="dash-mode-indicator" class="flex items-center gap-1.5">
             <span class="material-symbols-outlined text-secondary text-[16px]">cell_tower</span>
             <span class="font-mono text-[10px] uppercase text-secondary font-semibold">Operational Grid Online</span>
           </div>
