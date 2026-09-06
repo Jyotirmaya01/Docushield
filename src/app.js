@@ -255,8 +255,8 @@ class DocuShieldApp {
               <span class="text-[10px] text-on-surface-variant block sm:inline sm:ml-2">All document screening &amp; forensic tools working in interactive sandbox mode.</span>
             </div>
           </div>
-          <button type="button" onclick="window.app.navigateTo('login')" class="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-[10px] text-on-surface hover:text-primary font-bold transition-all flex-shrink-0 border border-outline/20">
-            Exit Demo
+          <button type="button" onclick="window.app.logoutOfficer()" class="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-[10px] text-on-surface hover:text-primary font-bold transition-all flex-shrink-0 border border-outline/20">
+            Exit Demo Mode
           </button>
         `;
         dashSessionBanner.classList.remove('hidden');
