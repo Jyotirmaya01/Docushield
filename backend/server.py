@@ -289,6 +289,75 @@ async def audit_log(limit: int = 100):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
+# ---- AUTH & OFFICER MANAGEMENT ENDPOINTS ----
+
+@app.post("/api/auth/login")
+async def officer_login(request: Request):
+    """Verify border officer credentials."""
+    try:
+        body = await request.json()
+        officer_id = body.get("officer_id", "")
+        password = body.get("password", "")
+        officer = verify_officer(officer_id, password)
+        if not officer:
+            return JSONResponse(status_code=401, content={"success": False, "error": "Invalid Officer ID or Password."})
+        if officer.get("status") != "ACTIVE":
+            return JSONResponse(status_code=403, content={"success": False, "error": "Account is suspended. Contact Sector Admin."})
+        return serialize_response({"success": True, "officer": officer})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/auth/admin-login")
+async def admin_login(request: Request):
+    """Verify administrator credentials."""
+    try:
+        body = await request.json()
+        admin_id = body.get("admin_id", "")
+        password = body.get("password", "")
+        admin = verify_admin(admin_id, password)
+        if not admin:
+            return JSONResponse(status_code=401, content={"success": False, "error": "Invalid Admin ID or Master Password."})
+        return serialize_response({"success": True, "admin": admin})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/officers")
+async def list_officers():
+    """Admin endpoint: Return all registered border officers."""
+    try:
+        officers = get_all_officers()
+        return serialize_response({"status": "success", "count": len(officers), "officers": officers})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/officers")
+async def provision_officer(request: Request):
+    """Admin endpoint: Provision a new verified border officer."""
+    try:
+        body = await request.json()
+        if not body.get("officer_id") or not body.get("full_name") or not body.get("password"):
+            raise HTTPException(status_code=400, detail="Officer ID, Full Name, and Password are required.")
+        new_officer = insert_officer(body)
+        return serialize_response({"status": "success", "officer": new_officer})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/officers/{officer_id}/status")
+async def change_officer_status(officer_id: str):
+    """Admin endpoint: Toggle officer active/suspended status."""
+    try:
+        updated = toggle_officer_status(officer_id)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Officer not found.")
+        return serialize_response({"status": "success", "officer": updated})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================
 # Serve frontend static files (index.html, etc.)
 # ============================================================
