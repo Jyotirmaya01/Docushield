@@ -11,6 +11,7 @@ import { ForensicEngine } from './pipeline/forensicEngine.js';
 import { ledgerInstance } from './ledger/hashChain.js';
 import { syncInstance } from './ledger/syncManager.js';
 import { BackendAPI } from './api/backendClient.js';
+import { AuthManager } from './auth/authManager.js';
 
 class DocuShieldApp {
   constructor() {
