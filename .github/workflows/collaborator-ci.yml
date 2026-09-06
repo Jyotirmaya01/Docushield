@@ -31,7 +31,7 @@ jobs:
           python -m py_compile auto_sync.py
           python -m py_compile backend/database.py
           python -m py_compile backend/server.py
-          python -m py_compile backend/test_auth.py
+          python -m py_compile backend/test_sqlite.py
           echo "All Python scripts compile cleanly!"
 
       - name: Validate JSON Files
