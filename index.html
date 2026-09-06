@@ -183,7 +183,7 @@
           </div>
         </div>
 
-        <form id="officer-login-form" class="bg-surface-container rounded-2xl p-space-base border border-surface-container-highest flex flex-col gap-space-md shadow-2xl">
+        <form id="officer-login-form" onsubmit="return window.app ? window.app.submitOfficerLogin(event) : false" class="bg-surface-container rounded-2xl p-space-base border border-surface-container-highest flex flex-col gap-space-md shadow-2xl">
           <div class="flex flex-col gap-1.5">
             <label class="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant flex justify-between">
               <span>Officer Serial ID</span>
@@ -224,14 +224,14 @@
           <!-- Divider -->
           <div class="relative flex py-1 items-center">
             <div class="flex-grow border-t border-surface-container-highest"></div>
-            <span class="flex-shrink mx-3 text-outline text-[10px] font-mono uppercase tracking-widest">or instant access</span>
+            <span class="flex-shrink mx-3 text-outline text-[10px] font-mono uppercase tracking-widest">or sandbox demo</span>
             <div class="flex-grow border-t border-surface-container-highest"></div>
           </div>
 
           <!-- ONE-CLICK DEMO ACCESS BUTTON -->
-          <button type="button" id="btn-quick-demo" onclick="window.app?.launchDemoMode?.()" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-secondary/15 via-primary/20 to-secondary/15 border border-secondary/50 hover:border-secondary text-secondary font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.99] group">
-            <span class="material-symbols-outlined text-[20px] text-secondary group-hover:animate-bounce">bolt</span>
-            <span>Try Demo Mode (Insp. R. Singh · CP-04)</span>
+          <button type="button" id="btn-quick-demo" onclick="window.app?.launchDemoMode?.()" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-tertiary/15 via-primary/20 to-tertiary/15 border border-tertiary/50 hover:border-tertiary text-tertiary font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.99] group">
+            <span class="material-symbols-outlined text-[20px] text-tertiary group-hover:animate-bounce">bolt</span>
+            <span>Open Demo Officer Dashboard (Sandbox)</span>
           </button>
 
           <!-- Enrolled Border Officers Quick-Fill Helper -->
