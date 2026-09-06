@@ -1794,6 +1794,10 @@ class DocuShieldApp {
 
 // Instantiate and attach to window
 window.app = new DocuShieldApp();
-document.addEventListener('DOMContentLoaded', () => {
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    window.app.init();
+  });
+} else {
   window.app.init();
-});
+}
