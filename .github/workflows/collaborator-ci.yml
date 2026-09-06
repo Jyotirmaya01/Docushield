@@ -1,0 +1,58 @@
+name: Collaborator PR Sanity Check
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  validate-codebase:
+    name: Validate Code & Syntax
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate Python Scripts
+        run: |
+          echo "Checking Python syntax..."
+          python -m py_compile auto_sync.py
+          python -m py_compile backend/database.py
+          python -m py_compile backend/server.py
+          python -m py_compile backend/test_auth.py
+          echo "All Python scripts compile cleanly!"
+
+      - name: Validate JSON Files
+        run: |
+          echo "Checking JSON schema and formatting..."
+          python -c "import json; json.load(open('manifest.json'))"
+          python -c "import json; json.load(open('vercel.json'))"
+          echo "JSON files are valid!"
+
+      - name: Validate JavaScript Syntax
+        run: |
+          echo "Checking JavaScript syntax..."
+          node -c sw.js
+          node -c test_verify.js
+          node -c src/app.js
+          node -c src/auth/authManager.js
+          echo "All core JavaScript modules passed syntax verification!"
+
+      - name: Verify Web Shell Files
+        run: |
+          test -f index.html || (echo "index.html is missing!" && exit 1)
+          test -f styles.css || (echo "styles.css is missing!" && exit 1)
+          test -f install.html || (echo "install.html is missing!" && exit 1)
+          echo "Web shell files verified!"
