@@ -876,8 +876,10 @@
             FORCE OFFLINE (TEST STORE &amp; FORWARD)
           </button>
         </div>
+      </div>
+
       <div class="pt-1 flex flex-col gap-2">
-        <button type="button" id="btn-profile-open-admin" class="w-full py-3 rounded-xl bg-tertiary/20 hover:bg-tertiary/30 text-tertiary font-bold text-xs uppercase tracking-wider transition-all border border-tertiary/40 flex items-center justify-center gap-2 shadow-sm">
+        <button type="button" id="btn-profile-open-admin" onclick="window.app?.openAdminConsole?.()" class="w-full py-3 rounded-xl bg-tertiary/20 hover:bg-tertiary/30 text-tertiary font-bold text-xs uppercase tracking-wider transition-all border border-tertiary/40 flex items-center justify-center gap-2 shadow-sm">
           <span class="material-symbols-outlined text-[18px]">admin_panel_settings</span>
           <span>Open Sector Command Admin Console</span>
         </button>
