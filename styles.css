@@ -1,0 +1,492 @@
+/* DocuShield — Responsive Tactical Command Console Styles
+   Breakpoints:
+     Mobile    : < 640px   — full-width single column
+     Tablet    : 640–1023px — 720px centered column
+     Laptop    : 1024–1279px — sidebar nav + wide content
+     Desktop   : ≥ 1280px  — sidebar nav + constrained content
+   ========================================================== */
+
+/* ============================
+   BASE ENHANCEMENTS
+   ============================ */
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ============================
+   ANIMATIONS
+   ============================ */
+@keyframes laser-sweep {
+  0%   { top: 8%;  opacity: 0.2; }
+  50%  {           opacity: 0.85; }
+  100% { top: 92%; opacity: 0.2; }
+}
+
+@keyframes pulse-ring {
+  0%   { transform: scale(0.95); opacity: 0.8; }
+  50%  { transform: scale(1.15); opacity: 0.2; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.animate-laser {
+  animation: laser-sweep 2.2s ease-in-out infinite alternate;
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2s ease-in-out infinite;
+}
+
+/* ============================
+   CUSTOM SCROLLBAR
+   ============================ */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: #111415; }
+::-webkit-scrollbar-thumb  { background: #333537; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #5a7a99; }
+* { scrollbar-width: thin; scrollbar-color: #333537 #111415; }
+
+/* ============================
+   RETICLE BRACKET MARKS
+   ============================ */
+.bracket-mark {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================
+   MATERIAL SYMBOLS
+   ============================ */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+  line-height: 1;
+}
+.material-symbols-outlined.fill {
+  font-variation-settings: 'FILL' 1;
+}
+
+/* ============================
+   GLASSMORPHISM PANEL
+   ============================ */
+.glass-panel {
+  background: rgba(26, 28, 30, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* ============================
+   APP CONTAINER — RESPONSIVE
+   ============================ */
+.app-container {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  position: relative;
+  background-color: #111415;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tablet — centered column with border accent */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .app-container {
+    max-width: 720px;
+    border-left: 1px solid #282a2c;
+    border-right: 1px solid #282a2c;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  }
+}
+
+/* Laptop / Desktop — full width with sidebar offset */
+@media (min-width: 1024px) {
+  .app-container {
+    max-width: 100%;
+    margin-left: 220px;
+    border: none;
+    box-shadow: none;
+  }
+}
+
+/* ============================
+   SAFE AREA INSETS (Notched Phones)
+   ============================ */
+@supports (padding: env(safe-area-inset-top)) {
+  #app-header {
+    padding-top: env(safe-area-inset-top);
+  }
+  #app-navigation {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ============================
+   HEADER — RESPONSIVE
+   ============================ */
+#app-header {
+  transition: left 0.3s ease, width 0.3s ease;
+}
+
+/* Tablet — center-align with container */
+@media (min-width: 640px) and (max-width: 1023px) {
+  #app-header {
+    max-width: 720px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+/* Desktop — offset by sidebar width */
+@media (min-width: 1024px) {
+  #app-header {
+    left: 220px;
+    width: calc(100% - 220px);
+    max-width: none;
+    transform: none;
+  }
+}
+
+/* ============================
+   SCREEN SECTIONS — RESPONSIVE PADDING
+   ============================ */
+.screen-view {
+  transition: padding 0.2s ease;
+}
+
+@media (min-width: 640px) {
+  .screen-view {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .screen-view {
+    padding-left: 2.5rem;
+    padding-right: 2.5rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .screen-view {
+    padding-left: 3rem;
+    padding-right: 3rem;
+  }
+
+  /* Cap content width on very large monitors */
+  #screen-approved,
+  #screen-flagged,
+  #screen-processing {
+    max-width: 960px;
+  }
+
+  #screen-capture {
+    max-width: 1100px;
+  }
+}
+
+/* ============================
+   BOTTOM NAVIGATION → SIDEBAR ON DESKTOP
+   ============================ */
+#app-navigation {
+  transition: all 0.3s ease;
+}
+
+/* Tablet — center the bottom dock */
+@media (min-width: 640px) and (max-width: 1023px) {
+  #app-navigation {
+    max-width: 720px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+/* Desktop — transform into a vertical left sidebar */
+@media (min-width: 1024px) {
+  #app-navigation {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: 220px;
+    max-width: 220px;
+    height: 100vh;
+    height: 100dvh;
+    border-top: none;
+    border-right: 1px solid #282a2c;
+    background: rgba(12, 14, 16, 0.98);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    overflow-y: auto;
+  }
+
+  /* Restructure inner flex container to vertical */
+  #app-navigation > div {
+    flex-direction: column;
+    height: 100%;
+    justify-content: flex-start;
+    align-items: stretch;
+    padding: 80px 12px 24px;
+    gap: 4px;
+  }
+
+  /* Sidebar branding block */
+  #app-navigation > div::before {
+    content: 'DOCUSHIELD';
+    display: block;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    color: #a9caec;
+    padding: 0 8px 20px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #282a2c;
+    text-transform: uppercase;
+  }
+
+  /* Nav buttons: horizontal icon + label */
+  #app-navigation .nav-btn {
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 11px 16px;
+    gap: 12px;
+    border-radius: 12px;
+    width: 100%;
+  }
+
+  #app-navigation .nav-btn:hover {
+    background: rgba(30, 32, 34, 0.9);
+  }
+
+  #app-navigation .nav-label {
+    font-size: 12px;
+    letter-spacing: 0.04em;
+  }
+}
+
+/* ============================
+   FIXED ACTION DOCKS — RESPONSIVE
+   ============================ */
+.action-dock {
+  transition: left 0.3s ease, width 0.3s ease;
+}
+
+/* Tablet — center with container */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .action-dock {
+    max-width: 720px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%);
+  }
+}
+
+/* Desktop — offset by sidebar */
+@media (min-width: 1024px) {
+  .action-dock {
+    left: 220px !important;
+    right: auto !important;
+    width: calc(100% - 220px) !important;
+    max-width: none !important;
+    transform: none;
+    padding-left: 2.5rem !important;
+    padding-right: 2.5rem !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .action-dock {
+    max-width: 960px !important;
+  }
+}
+
+/* ============================
+   DASHBOARD — RESPONSIVE 2-COL GRID
+   ============================ */
+@media (min-width: 1024px) {
+  #screen-dashboard:not(.hidden) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    align-items: start;
+  }
+
+  /* Metrics deck spans both columns */
+  #metrics-deck {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ============================
+   CAPTURE — VIEWFINDER MAX-WIDTH
+   ============================ */
+@media (min-width: 768px) {
+  #viewfinder-container {
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* ============================
+   PROCESSING STAGES — 2-COL ON DESKTOP
+   ============================ */
+@media (min-width: 1024px) {
+  #processing-stages:not(.hidden) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ============================
+   QUEUE & AUDIT — MULTI-COLUMN GRIDS
+   ============================ */
+@media (min-width: 768px) {
+  #queue-items-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  #audit-blocks-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  #queue-items-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ============================
+   PROFILE — 2-COL ON DESKTOP
+   ============================ */
+@media (min-width: 1024px) {
+  #screen-profile:not(.hidden) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    align-items: start;
+  }
+
+  /* Logout button spans full width */
+  #screen-profile > button:last-of-type {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ============================
+   LOGIN — CENTERED ON WIDER SCREENS
+   ============================ */
+@media (min-width: 640px) {
+  #screen-login {
+    align-items: center;
+  }
+
+  #screen-login > * {
+    max-width: 440px;
+    width: 100%;
+  }
+}
+
+/* ============================
+   MODALS — WIDER ON TABLET+
+   ============================ */
+@media (min-width: 768px) {
+  #retake-modal > div,
+  #verify-modal > div {
+    max-width: 480px;
+  }
+}
+
+/* ============================
+   TOAST — DESKTOP POSITIONING
+   ============================ */
+@media (min-width: 1024px) {
+  #app-toast {
+    left: 240px;
+    right: auto;
+  }
+}
+
+/* ============================
+   RESPONSIVE TYPOGRAPHY
+   ============================ */
+@media (min-width: 640px) {
+  h1 { font-size: 1.375rem; }
+  h2 { font-size: 1.25rem; }
+}
+
+@media (min-width: 1024px) {
+  h1 { font-size: 1.625rem; }
+  h2 { font-size: 1.375rem; }
+  h3 { font-size: 1.0625rem; }
+}
+
+/* ============================
+   TOUCH TARGETS (Coarse Pointer = Touch)
+   ============================ */
+@media (pointer: coarse) {
+  button:not(.nav-btn),
+  [role="button"] {
+    min-height: 44px;
+  }
+}
+
+/* ============================
+   FOCUS VISIBILITY (Keyboard Navigation)
+   ============================ */
+:focus-visible {
+  outline: 2px solid #a9caec;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ============================
+   DESKTOP HOVER ENHANCEMENTS
+   ============================ */
+@media (hover: hover) {
+  .nav-btn:hover .nav-icon {
+    color: #a9caec;
+    transition: color 0.2s ease;
+  }
+}
+
+/* ============================
+   PRINT STYLES (Audit Log)
+   ============================ */
+@media print {
+  #app-header,
+  #app-navigation,
+  .action-dock {
+    display: none !important;
+  }
+
+  .app-container {
+    max-width: 100%;
+    margin: 0;
+    box-shadow: none;
+    border: none;
+  }
+
+  .screen-view {
+    padding: 1rem;
+  }
+
+  body {
+    background: white;
+    color: black;
+  }
+}

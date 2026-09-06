@@ -1,0 +1,44 @@
+# DocuShield — Dependencies & Build
+node_modules/
+dist/
+.vercel/
+.next/
+
+# Python Backend
+backend/__pycache__/
+backend/*.pyc
+backend/*.db
+*.pyc
+__pycache__/
+venv/
+.venv/
+*.egg-info/
+
+# Environment & Secrets
+.env
+.env.local
+.env.production
+*.pem
+*.key
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# OS Files
+.DS_Store
+*.log
+
+# Debug & Test Artifacts
+test_*.js
+*.map
+
+# Documentation artifacts (non-project)
+sih-all-documents.txt
+implementation_plan.md

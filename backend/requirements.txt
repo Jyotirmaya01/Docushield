@@ -1,0 +1,8 @@
+# DocuShield Backend Dependencies
+# Install with: pip install -r requirements.txt
+# Note: SQLite (sqlite3) is included in Python standard library (zero external DB installation required)
+
+fastapi>=0.141.0
+uvicorn>=0.52.0
+python-multipart>=0.0.32
+Pillow>=12.0.0

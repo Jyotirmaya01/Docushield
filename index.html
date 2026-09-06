@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <title>DocuShield — AI Border Document Screening Console</title>
+  <meta name="description" content="Offline-first AI-powered border document verification console. Scans passports, national IDs, and border permits using on-device ML inference with tamper-proof cryptographic audit logging.">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#111415">
+
+  <!-- PWA & Mobile App Meta -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DocuShield">
+  <meta name="application-name" content="DocuShield">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="msapplication-TileColor" content="#111415">
+  <meta name="msapplication-tap-highlight" content="no">
+
+  <!-- Apple Touch Icons -->
+  <link rel="apple-touch-icon" sizes="152x152" href="./assets/icon-152.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="./assets/icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="./assets/icon-512.png">
+  <link rel="icon" type="image/svg+xml" href="./assets/logo.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png">
+
+  <!-- Open Graph / Social Sharing -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="DocuShield — AI Border Document Screening">
+  <meta property="og:description" content="Offline-first AI-powered document verification for border security. Install as an app on any device.">
+  <meta property="og:image" content="./assets/icon-512.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="DocuShield">
+
+  <!-- Google Fonts & Material Symbols -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS & Stitch Custom Palette -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface": "#111415",
+            "surface-dim": "#111415",
+            "surface-bright": "#37393b",
+            "surface-container-lowest": "#0c0e10",
+            "surface-container-low": "#1a1c1e",
+            "surface-container": "#1e2022",
+            "surface-container-high": "#282a2c",
+            "surface-container-highest": "#333537",
+            "surface-variant": "#333537",
+            "on-surface": "#e2e2e5",
+            "on-surface-variant": "#c3c7ce",
+            "outline": "#8c9198",
+            "outline-variant": "#42474d",
+            "primary": "#a9caec",
+            "primary-container": "#5a7a99",
+            "on-primary": "#0d334e",
+            "on-primary-container": "#00060e",
+            "primary-fixed": "#cee5ff",
+            "secondary": "#72d9b7",
+            "secondary-container": "#008468",
+            "on-secondary": "#00382a",
+            "on-secondary-container": "#f5fff8",
+            "tertiary": "#ffb95a",
+            "tertiary-container": "#c28428",
+            "on-tertiary": "#462a00",
+            "error": "#ffb4ab",
+            "error-container": "#93000a",
+            "on-error": "#690005"
+          },
+          fontFamily: {
+            "sans": ["Inter", "system-ui", "sans-serif"],
+            "mono": ["JetBrains Mono", "monospace"],
+            "headline-lg": ["Inter", "sans-serif"],
+            "title-sm": ["Inter", "sans-serif"],
+            "label-data": ["JetBrains Mono", "monospace"],
+            "label-micro": ["Inter", "sans-serif"],
+            "code-sm": ["JetBrains Mono", "monospace"]
+          },
+          spacing: {
+            "space-2xs": "0.125rem",
+            "space-xs": "0.25rem",
+            "space-sm": "0.5rem",
+            "space-md": "0.75rem",
+            "space-base": "1rem",
+            "space-lg": "1.5rem",
+            "space-xl": "2rem",
+            "space-2xl": "3rem"
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="bg-surface text-on-surface font-sans select-none antialiased min-h-screen">
+
+  <div class="app-container">
+
+    <!-- GLOBAL PERSISTENT HEADER -->
+    <header id="app-header" class="fixed top-0 w-full z-40 bg-surface/85 backdrop-blur-xl border-b border-surface-container-high/60">
+      <div class="h-16 px-space-base flex items-center justify-between">
+        <div class="flex items-center gap-space-sm cursor-pointer" onclick="window.app.navigateTo('dashboard')">
+          <img alt="DocuShield Logo" class="h-7 w-auto object-contain" src="./assets/logo.svg">
+          <div class="flex flex-col">
+            <span class="font-bold text-xs uppercase tracking-wider text-on-surface leading-none">DOCUSHIELD</span>
+            <span class="font-mono text-[10px] text-on-surface-variant leading-none mt-1">SSB SECTOR 04 · CP-04</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-space-sm">
+          <div class="sync-state-badge flex items-center gap-space-xs px-2.5 py-1 rounded bg-surface-container-high">
+            <span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
+            <span class="font-mono text-[10px] text-secondary uppercase font-semibold">STORE &amp; FORWARD</span>
+          </div>
+          <button type="button" aria-label="Officer Profile" onclick="window.app.navigateTo('profile')" class="w-8 h-8 rounded-full bg-surface-container-highest border border-outline/30 flex items-center justify-center text-primary text-xs font-bold font-mono hover:border-primary transition-colors">
+            RS
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- SCREEN 1: OFFICER LOGIN -->
+    <section id="screen-login" class="screen-view w-full flex flex-col justify-center min-h-screen px-space-base py-space-xl">
+      <div class="flex items-center justify-between pb-space-lg">
+        <div class="inline-flex items-center gap-space-xs px-space-sm py-1 rounded-full bg-surface-container-high">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-tertiary opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-tertiary"></span>
+          </span>
+          <span class="font-mono text-[10px] text-tertiary tracking-wider uppercase font-semibold">OFFLINE AUTH ACTIVE</span>
+        </div>
+        <div class="flex items-center gap-space-xs text-on-surface-variant font-mono text-xs">
+          <span class="material-symbols-outlined text-[14px]">shield</span>
+          <span>SEC-LEVEL 4</span>
+        </div>
+      </div>
+
+      <div class="flex flex-col items-center text-center pb-space-lg">
+        <div class="w-16 h-16 rounded-2xl bg-surface-container-high border border-surface-container-highest flex items-center justify-center shadow-xl mb-3 relative">
+          <span class="material-symbols-outlined text-primary text-[32px]">verified_user</span>
+          <span class="w-3 h-3 rounded-full bg-secondary absolute -top-1 -right-1 border-2 border-surface"></span>
+        </div>
+        <span class="font-mono text-[11px] text-primary tracking-widest uppercase mb-1">SSB BORDER INTELLIGENCE PORTAL</span>
+        <h1 class="text-xl font-bold uppercase tracking-tight text-on-surface">Officer Access Control</h1>
+        <p class="text-xs text-on-surface-variant mt-1">Indo-Nepal Checkpoint CP-04 (Panitanki Terminal)</p>
+      </div>
+
+      <form id="login-form" class="bg-surface-container rounded-2xl p-space-base border border-surface-container-highest flex flex-col gap-space-md shadow-2xl">
+        <div class="flex flex-col gap-1.5">
+          <label class="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant flex justify-between">
+            <span>Officer Serial ID</span>
+            <span class="text-primary lowercase">verified</span>
+          </label>
+          <div class="relative flex items-center bg-surface-container-highest rounded-xl">
+            <span class="material-symbols-outlined text-[18px] text-on-surface-variant absolute left-3">badge</span>
+            <input type="text" id="login-officer-id" value="SSB-7489-N" class="w-full h-12 bg-transparent pl-10 pr-10 text-on-surface font-mono text-sm focus:outline-none rounded-xl" required spellcheck="false">
+            <span class="material-symbols-outlined text-[18px] text-secondary absolute right-3">check_circle</span>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant flex justify-between">
+            <span>Terminal PIN</span>
+            <span class="text-outline text-[10px]">6-DIGIT</span>
+          </label>
+          <div class="relative flex items-center bg-surface-container-highest rounded-xl">
+            <span class="material-symbols-outlined text-[18px] text-on-surface-variant absolute left-3">key</span>
+            <input type="password" value="882194" class="w-full h-12 bg-transparent pl-10 pr-3 text-on-surface font-mono text-sm tracking-widest focus:outline-none rounded-xl" required>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full h-12 rounded-xl bg-primary text-on-primary font-semibold text-sm uppercase tracking-wide hover:bg-primary/90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg mt-2">
+          <span>Authenticate &amp; Open Console</span>
+          <span class="material-symbols-outlined text-[18px]">login</span>
+        </button>
+      </form>
+
+      <div class="mt-space-lg text-center font-mono text-[11px] text-outline">
+        <span>Hardware ID: EDGE-TPU-01 // SHA-256 KERNEL ANCHOR</span>
+      </div>
+    </section>
+
+    <!-- SCREEN 2: HOME DASHBOARD -->
+    <section id="screen-dashboard" class="screen-view hidden w-full flex flex-col pt-20 pb-24 px-space-base gap-space-base">
+      <!-- Officer Operational Status Card -->
+      <div class="w-full bg-surface-container-low rounded-2xl p-space-base border border-surface-container-high flex flex-col gap-space-sm shadow-sm">
+        <div class="flex items-center justify-between pb-1 border-b border-surface-container-highest/50">
+          <div class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-secondary text-[16px]">cell_tower</span>
+            <span class="font-mono text-[10px] uppercase text-secondary font-semibold">Operational Grid Online</span>
+          </div>
+          <div class="flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container-highest text-tertiary font-mono text-[10px]">
+            <span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>
+            <span>SYNC QUEUE: ACTIVE</span>
+          </div>
+        </div>
+        <div class="flex flex-col pt-1">
+          <div class="flex items-center gap-1 font-mono text-[11px] text-primary-fixed uppercase">
+            <span class="material-symbols-outlined text-[14px]">location_on</span>
+            <span>CHECKPOINT CP-04 · INDO-NEPAL</span>
+          </div>
+          <h1 class="text-lg font-bold text-on-surface mt-0.5">Insp. Rameshwar Singh <span class="text-on-surface-variant font-normal text-sm">(SSB)</span></h1>
+          <div class="flex items-center gap-3 text-on-surface-variant text-xs mt-1 font-mono">
+            <span>Shift: 06:00 - 14:00</span>
+            <span>•</span>
+            <span>ID: SSB-7489-N</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tactical Primary Trigger: Scan Document -->
+      <button type="button" id="dash-scan-btn" class="w-full bg-primary-container hover:bg-primary-container/90 active:scale-[0.99] transition-all rounded-2xl p-space-base flex items-center justify-between shadow-xl text-left border border-primary/30">
+        <div class="flex items-center gap-space-md">
+          <div class="w-12 h-12 rounded-xl bg-surface-container-lowest flex items-center justify-center text-primary-fixed shadow-inner">
+            <span class="material-symbols-outlined text-[28px]">document_scanner</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="font-bold text-sm text-on-primary-container uppercase tracking-wide">SCAN NEW DOCUMENT</span>
+            <span class="text-xs text-on-primary-container/80">Passport / National ID / Border Permit</span>
+          </div>
+        </div>
+        <div class="w-8 h-8 rounded-full bg-surface-container-highest/40 flex items-center justify-center text-on-primary-container">
+          <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+        </div>
+      </button>
+
+      <!-- Metrics Triage Deck -->
+      <div id="metrics-deck" class="grid grid-cols-3 gap-space-xs">
+        <div class="bg-surface-container-low rounded-xl p-space-sm flex flex-col justify-between border border-surface-container-high">
+          <span class="font-mono text-[10px] text-on-surface-variant uppercase">Scanned</span>
+          <div class="mt-1">
+            <span id="dash-total-scanned" class="font-mono text-xl font-bold text-on-surface">342</span>
+            <span class="font-mono text-[9px] text-outline block">Today Total</span>
+          </div>
+        </div>
+        <div class="bg-surface-container-low rounded-xl p-space-sm flex flex-col justify-between border border-surface-container-high">
+          <span class="font-mono text-[10px] text-tertiary uppercase">Flagged</span>
+          <div class="mt-1">
+            <span id="dash-flagged-count" class="font-mono text-xl font-bold text-tertiary">18</span>
+            <span class="font-mono text-[9px] text-tertiary/80 block">Action Req.</span>
+          </div>
+        </div>
+        <div class="bg-surface-container-low rounded-xl p-space-sm flex flex-col justify-between border border-surface-container-high">
+          <span class="font-mono text-[10px] text-secondary uppercase">Cleared</span>
+          <div class="mt-1">
+            <span id="dash-approved-count" class="font-mono text-xl font-bold text-secondary">319</span>
+            <span class="font-mono text-[9px] text-secondary/80 block">93.2% Auto</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-time Lane Telemetry -->
+      <div class="bg-surface-container-low rounded-xl p-space-sm flex items-center justify-between border border-surface-container-high">
+        <div class="flex items-center gap-space-sm">
+          <span class="material-symbols-outlined text-primary text-[20px]">speed</span>
+          <div class="flex flex-col">
+            <span class="text-xs font-semibold text-on-surface">Lane 04 Throughput</span>
+            <span class="text-[11px] text-on-surface-variant font-mono">Avg Latency: 1.82s on Edge TPU</span>
+          </div>
+        </div>
+        <span class="px-2 py-0.5 rounded bg-secondary/15 font-mono text-[10px] text-secondary uppercase font-semibold">OPTIMAL</span>
+      </div>
+
+      <!-- Quick Triage Action Buttons -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-space-xs md:gap-3">
+        <button type="button" onclick="window.app.navigateTo('queue')" class="p-space-sm rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors flex items-center gap-2 border border-surface-container-highest">
+          <span class="material-symbols-outlined text-tertiary text-[20px]">rate_review</span>
+          <div class="flex flex-col text-left">
+            <span class="text-xs font-semibold text-on-surface">Review Queue</span>
+            <span class="font-mono text-[10px] text-tertiary">Escalated Cases</span>
+          </div>
+        </button>
+        <button type="button" onclick="window.app.navigateTo('audit')" class="p-space-sm rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors flex items-center gap-2 border border-surface-container-highest">
+          <span class="material-symbols-outlined text-primary text-[20px]">receipt_long</span>
+          <div class="flex flex-col text-left">
+            <span class="text-xs font-semibold text-on-surface">Audit Ledger</span>
+            <span class="font-mono text-[10px] text-primary">SHA-256 Logs</span>
+          </div>
+        </button>
+      </div>
+    </section>
+
+    <!-- SCREEN 3: DOCUMENT CAPTURE -->
+    <section id="screen-capture" class="screen-view hidden w-full flex flex-col pt-20 pb-24 px-space-base gap-space-sm">
+      <!-- Utility Ribbon -->
+      <div class="flex items-center justify-between gap-space-sm">
+        <button type="button" onclick="window.app.navigateTo('dashboard')" aria-label="Back" class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors">
+          <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+        </button>
+        <div class="flex-1 flex items-center justify-center gap-1.5 px-space-sm py-1 rounded-lg bg-surface-container-lowest border border-surface-container-high">
+          <span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+          <span class="font-mono text-[10px] text-secondary tracking-wider uppercase font-semibold">OFFLINE LOCAL ML INFERENCE</span>
+        </div>
+        <button type="button" id="cam-switch-btn" aria-label="Camera Switch" class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors">
+          <span class="material-symbols-outlined text-[20px]">cameraswitch</span>
+        </button>
+      </div>
+
+      <!-- HUD Status Banner -->
+      <div id="hud-status-banner" class="w-full flex items-center justify-between px-space-md py-space-sm rounded-xl bg-surface-container-lowest border border-secondary/40 transition-colors duration-300">
+        <div class="flex items-center gap-space-sm">
+          <span id="hud-icon" class="material-symbols-outlined text-[20px] text-secondary">verified</span>
+          <div class="flex flex-col">
+            <span id="hud-text" class="font-bold text-xs text-secondary uppercase tracking-wider">DOCUMENT LOCKED — HIGH FIDELITY</span>
+            <span id="hud-detail" class="font-mono text-[10px] text-on-surface-variant">ICAO 9303 MRZ &amp; VIZ FIELD EXTRACTION ACTIVE</span>
+          </div>
+        </div>
+        <span id="hud-lock-pct" class="font-mono text-[11px] text-secondary px-2 py-0.5 rounded bg-surface-container-highest font-bold">LOCK 100%</span>
+      </div>
+
+      <!-- Main Viewfinder Container -->
+      <div id="viewfinder-container" class="relative w-full aspect-[4/5] rounded-2xl overflow-hidden bg-surface-container-lowest flex items-center justify-center shadow-2xl border border-surface-container-high">
+        <!-- Live Video Element -->
+        <video id="camera-video" playsinline muted autoplay class="absolute inset-0 w-full h-full object-cover hidden"></video>
+        <!-- Offscreen Canvas for Analysis -->
+        <canvas id="camera-canvas" class="hidden"></canvas>
+        <!-- Specimen Preview Image Fallback -->
+        <div id="specimen-preview-img" class="absolute inset-0 bg-cover bg-center opacity-90 transition-all duration-500" style="background-image: url('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&auto=format&fit=crop&q=80');"></div>
+
+        <!-- Optical Dark Vignette Overlay -->
+        <div class="absolute inset-0 bg-gradient-to-b from-surface-container-lowest/80 via-transparent to-surface-container-lowest/90 pointer-events-none"></div>
+
+        <!-- Center Crosshair Reticle -->
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
+          <div class="w-8 h-[1px] bg-primary"></div>
+          <div class="h-8 w-[1px] bg-primary absolute"></div>
+        </div>
+
+        <!-- Animated Laser Scanline -->
+        <div class="absolute left-4 right-4 h-0.5 bg-gradient-to-r from-transparent via-secondary to-transparent pointer-events-none animate-laser"></div>
+
+        <!-- Document Alignment Frame Overlay with 4 Corner Brackets -->
+        <div class="relative w-[86%] h-[74%] rounded-xl pointer-events-none flex flex-col justify-between p-3">
+          <!-- Top Left Bracket -->
+          <div class="absolute top-0 left-0 w-6 h-6 flex flex-col">
+            <div class="bracket-mark w-6 h-1 bg-secondary rounded-t shadow-sm"></div>
+            <div class="bracket-mark w-1 h-5 bg-secondary rounded-bl shadow-sm"></div>
+          </div>
+          <!-- Top Right Bracket -->
+          <div class="absolute top-0 right-0 w-6 h-6 flex flex-col items-end">
+            <div class="bracket-mark w-6 h-1 bg-secondary rounded-t shadow-sm"></div>
+            <div class="bracket-mark w-1 h-5 bg-secondary rounded-br shadow-sm"></div>
+          </div>
+
+          <!-- Top Meta Telemetry in Viewfinder -->
+          <div class="flex items-center justify-between text-secondary px-1 font-mono text-[10px] tracking-wider">
+            <span class="flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
+              DOC-ALIGNMENT GUIDES
+            </span>
+            <span class="font-bold">ISO/IEC 7810</span>
+          </div>
+
+          <!-- Bottom MRZ Bounding Target -->
+          <div class="w-full flex flex-col gap-1 mt-auto">
+            <div class="w-full border border-secondary/60 bg-secondary/10 rounded-lg p-1.5 flex flex-col gap-0.5">
+              <div class="flex items-center justify-between text-secondary font-mono text-[9px] uppercase font-bold">
+                <span>ICAO MRZ TARGET ZONE</span>
+                <span>CHECKSUM READY</span>
+              </div>
+              <div class="font-mono text-[8px] text-secondary tracking-widest truncate">P&lt;INDSHARMA&lt;&lt;RAHUL&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;</div>
+            </div>
+          </div>
+
+          <!-- Bottom Left Bracket -->
+          <div class="absolute bottom-0 left-0 w-6 h-6 flex flex-col justify-end">
+            <div class="bracket-mark w-1 h-5 bg-secondary rounded-tl shadow-sm"></div>
+            <div class="bracket-mark w-6 h-1 bg-secondary rounded-b shadow-sm"></div>
+          </div>
+          <!-- Bottom Right Bracket -->
+          <div class="absolute bottom-0 right-0 w-6 h-6 flex flex-col items-end justify-end">
+            <div class="bracket-mark w-1 h-5 bg-secondary rounded-tr shadow-sm"></div>
+            <div class="bracket-mark w-6 h-1 bg-secondary rounded-b shadow-sm"></div>
+          </div>
+        </div>
+
+        <!-- Overlaid Quality Gate Telemetry Pills -->
+        <div class="absolute bottom-3 left-3 right-3 flex flex-col gap-1 p-2 rounded-xl bg-surface-container-lowest/90 backdrop-blur-md border border-surface-container-high text-on-surface text-xs font-mono">
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="text-outline">GLARE / HISTOGRAM:</span>
+            <span id="telemetry-glare-val" class="text-secondary font-semibold">BALANCED (2.1%)</span>
+          </div>
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="text-outline">DOCUMENT FRAMING:</span>
+            <span id="telemetry-framing-val" class="text-secondary font-semibold">ALIGNED (96%)</span>
+          </div>
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="text-outline">LAPLACIAN BLUR:</span>
+            <span id="telemetry-blur-val" class="text-secondary font-semibold">SHARP (VAR: 165)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Specimen Selector Pills (For 1-Click SIH Hackathon Demo) -->
+      <div class="flex flex-col gap-1.5 pt-1">
+        <div class="flex items-center justify-between">
+          <span class="font-mono text-[10px] uppercase tracking-wider text-outline">Select Demo Specimen / Trigger</span>
+          <span class="font-mono text-[10px] text-primary">1-CLICK DEMO</span>
+        </div>
+        <div id="specimen-selector-container" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 lg:gap-3"></div>
+      </div>
+
+      <!-- Shutter Console -->
+      <div class="flex items-center justify-around pt-2 pb-2">
+        <div class="relative flex items-center justify-center">
+          <div class="absolute -inset-2 rounded-full bg-primary-container/20 animate-pulse pointer-events-none"></div>
+          <button type="button" id="shutter-btn" aria-label="Trigger Capture" class="relative w-16 h-16 rounded-full bg-surface-container-high border-2 border-primary/40 flex items-center justify-center text-on-primary-container shadow-2xl active:scale-95 transition-all">
+            <div class="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-on-primary">
+              <span class="material-symbols-outlined text-[28px]">photo_camera</span>
+            </div>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 4: PROCESSING STATUS -->
+    <section id="screen-processing" class="screen-view hidden w-full flex flex-col pt-20 pb-24 px-space-base gap-space-base">
+      <!-- Hardware Telemetry Header -->
+      <div class="flex items-center justify-between">
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-surface-container-high text-on-surface-variant font-mono text-xs">
+          <span class="material-symbols-outlined text-[14px] text-secondary">memory</span>
+          <span>EDGE ACCELERATOR // TPU_01</span>
+        </div>
+        <span class="font-mono text-xs text-tertiary">VRAM: 92% ALLOC</span>
+      </div>
+
+      <!-- Title & Elapsed -->
+      <div class="flex flex-col gap-1">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-tertiary animate-ping"></span>
+          <h2 class="text-base font-bold text-on-surface uppercase tracking-tight">PIPELINE INFERENCE ACTIVE</h2>
+        </div>
+        <p class="text-xs text-on-surface-variant">Executing local on-device screening stages without internet...</p>
+      </div>
+
+      <!-- Specimen Card -->
+      <div class="bg-surface-container rounded-xl p-space-sm flex items-center justify-between border border-surface-container-high shadow-sm font-mono text-xs">
+        <div class="flex flex-col">
+          <span id="process-doc-ref" class="text-primary font-bold">DOC_REF: #9942-TXB</span>
+          <span class="text-on-surface-variant text-[11px]">ICAO 9303 Local Machine Inference</span>
+        </div>
+        <div class="flex flex-col items-end">
+          <span id="process-elapsed-time" class="text-secondary font-bold">0.00s ELAPSED</span>
+          <span class="text-outline text-[10px]">8 STAGES TOTAL</span>
+        </div>
+      </div>
+
+      <!-- Step-by-Step Linear Status Progress Tracker -->
+      <div id="processing-stages" class="bg-surface-container-high rounded-2xl p-space-base flex flex-col gap-space-md border border-surface-container-highest shadow-xl">
+        <!-- Stage 1 -->
+        <div id="stage-step-1" class="flex items-start gap-3 relative transition-all">
+          <div class="w-7 h-7 rounded-full bg-surface-container-lowest border border-outline/40 flex items-center justify-center flex-shrink-0">
+            <span class="stage-icon material-symbols-outlined text-[16px] text-outline">hourglass_empty</span>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-xs text-on-surface">1. Capture Quality Gate (Laplacian &amp; CLAHE)</h3>
+              <span class="stage-badge font-mono text-[10px] text-outline">PENDING</span>
+            </div>
+            <p class="stage-desc text-[11px] text-on-surface-variant mt-0.5">Lighting &amp; focus check</p>
+          </div>
+        </div>
+
+        <!-- Stage 2 -->
+        <div id="stage-step-2" class="flex items-start gap-3 relative transition-all">
+          <div class="w-7 h-7 rounded-full bg-surface-container-lowest border border-outline/40 flex items-center justify-center flex-shrink-0">
+            <span class="stage-icon material-symbols-outlined text-[16px] text-outline">hourglass_empty</span>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-xs text-on-surface">2. OCR Extraction (Tesseract / Regex)</h3>
+              <span class="stage-badge font-mono text-[10px] text-outline">PENDING</span>
+            </div>
+            <p class="stage-desc text-[11px] text-on-surface-variant mt-0.5">Demographic text and MRZ line parsing</p>
+          </div>
+        </div>
+
+        <!-- Stage 3 -->
+        <div id="stage-step-3" class="flex items-start gap-3 relative transition-all">
+          <div class="w-7 h-7 rounded-full bg-surface-container-lowest border border-outline/40 flex items-center justify-center flex-shrink-0">
+            <span class="stage-icon material-symbols-outlined text-[16px] text-outline">hourglass_empty</span>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-xs text-on-surface">3. MRZ Modulo-10 Validation (7-3-1)</h3>
+              <span class="stage-badge font-mono text-[10px] text-outline">PENDING</span>
+            </div>
+            <p class="stage-desc text-[11px] text-on-surface-variant mt-0.5">ICAO 9303 checksum computation</p>
+          </div>
+        </div>
+
+        <!-- Stage 4 -->
+        <div id="stage-step-4" class="flex items-start gap-3 relative transition-all">
+          <div class="w-7 h-7 rounded-full bg-surface-container-lowest border border-outline/40 flex items-center justify-center flex-shrink-0">
+            <span class="stage-icon material-symbols-outlined text-[16px] text-outline">hourglass_empty</span>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-xs text-on-surface">4. Cross-Field Format Consistency</h3>
+              <span class="stage-badge font-mono text-[10px] text-outline">PENDING</span>
+            </div>
+            <p class="stage-desc text-[11px] text-on-surface-variant mt-0.5">Visual zone vs MRZ parity</p>
+          </div>
+        </div>
+
+        <!-- Stage 5 -->
+        <div id="stage-step-5" class="flex items-start gap-3 relative transition-all">
+          <div class="w-7 h-7 rounded-full bg-surface-container-lowest border border-outline/40 flex items-center justify-center flex-shrink-0">
+            <span class="stage-icon material-symbols-outlined text-[16px] text-outline">hourglass_empty</span>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-xs text-on-surface">5. Chronology &amp; Anomaly Logic</h3>
+              <span class="stage-badge font-mono text-[10px] text-outline">PENDING</span>
+            </div>
+            <p class="stage-desc text-[11px] text-on-surface-variant mt-0.5">Age validation, expiry chronology &amp; ISO code</p>
+          </div>
+        </div>
+
+        <!-- Stage 6 -->
+        <div id="stage-step-6" class="flex items-start gap-3 relative transition-all">
+          <div class="w-7 h-7 rounded-full bg-surface-container-lowest border border-outline/40 flex items-center justify-center flex-shrink-0">
+            <span class="stage-icon material-symbols-outlined text-[16px] text-outline">hourglass_empty</span>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-xs text-on-surface">6. CNN Tamper &amp; Splice Detection</h3>
+              <span class="stage-badge font-mono text-[10px] text-outline">PENDING</span>
+            </div>
+            <p class="stage-desc text-[11px] text-on-surface-variant mt-0.5">Photo replacement &amp; font kerning inspection</p>
+          </div>
+        </div>
+
+        <!-- Stage 7 -->
+        <div id="stage-step-7" class="flex items-start gap-3 relative transition-all">
+          <div class="w-7 h-7 rounded-full bg-surface-container-lowest border border-outline/40 flex items-center justify-center flex-shrink-0">
+            <span class="stage-icon material-symbols-outlined text-[16px] text-outline">hourglass_empty</span>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-xs text-on-surface">7. Biometric Live Face Verification</h3>
+              <span class="stage-badge font-mono text-[10px] text-outline">PENDING</span>
+            </div>
+            <p class="stage-desc text-[11px] text-on-surface-variant mt-0.5">Document photo vs live officer camera</p>
+          </div>
+        </div>
+
+        <!-- Stage 8 -->
+        <div id="stage-step-8" class="flex items-start gap-3 relative transition-all">
+          <div class="w-7 h-7 rounded-full bg-surface-container-lowest border border-outline/40 flex items-center justify-center flex-shrink-0">
+            <span class="stage-icon material-symbols-outlined text-[16px] text-outline">hourglass_empty</span>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-xs text-on-surface">8. Adversarial Hidden-Text Scanner</h3>
+              <span class="stage-badge font-mono text-[10px] text-outline">PENDING</span>
+            </div>
+            <p class="stage-desc text-[11px] text-on-surface-variant mt-0.5">Margin prompt-injection anomaly defense</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 5: RESULT (APPROVED) -->
+    <section id="screen-approved" class="screen-view hidden w-full flex flex-col pt-20 pb-28 px-space-base gap-space-base">
+      <!-- High Confidence Badge -->
+      <div class="w-full bg-secondary-container/20 border border-secondary/40 rounded-2xl p-space-base flex items-center gap-space-md">
+        <div class="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center text-on-secondary shadow-lg">
+          <span class="material-symbols-outlined text-[28px]">verified</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="font-mono text-[10px] uppercase text-secondary font-bold tracking-wider">AUTO-APPROVAL THRESHOLD MET</span>
+          <h2 class="text-base font-bold text-on-surface">CLEARANCE AUTHORIZED</h2>
+          <span id="approved-block-ref" class="font-mono text-[10px] text-secondary">IMMUTABLE HASH READY // SHA-256</span>
+        </div>
+      </div>
+
+      <!-- Traveler Bio Card -->
+      <div class="bg-surface-container rounded-2xl p-space-base border border-surface-container-high flex flex-col gap-space-md shadow-xl">
+        <div class="flex items-center gap-space-md">
+          <img id="approved-photo" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200" alt="Traveler" class="w-16 h-20 rounded-xl object-cover border border-secondary/60 shadow-md">
+          <div class="flex flex-col flex-1">
+            <span class="font-mono text-[10px] text-primary uppercase font-bold" id="approved-doc-type">PASSPORT (ID-3)</span>
+            <h3 class="text-lg font-bold text-on-surface" id="approved-traveler-name">RAHUL SHARMA</h3>
+            <span class="font-mono text-xs text-secondary font-bold" id="approved-doc-num">Z3918204</span>
+            <span class="text-xs text-on-surface-variant mt-0.5" id="approved-nat">IND (India)</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-space-sm pt-2 border-t border-surface-container-highest/60 font-mono text-xs">
+          <div>
+            <span class="text-outline text-[10px] uppercase block">DATE OF BIRTH</span>
+            <span id="approved-dob" class="text-on-surface font-semibold">1992-07-14</span>
+          </div>
+          <div>
+            <span class="text-outline text-[10px] uppercase block">EXPIRY DATE</span>
+            <span id="approved-exp" class="text-secondary font-semibold">2030-04-11</span>
+          </div>
+          <div>
+            <span class="text-outline text-[10px] uppercase block">SEX</span>
+            <span id="approved-sex" class="text-on-surface font-semibold">MALE</span>
+          </div>
+          <div>
+            <span class="text-outline text-[10px] uppercase block">BIOMETRIC MATCH</span>
+            <span id="approved-confidence-pct" class="text-secondary font-semibold">98.4%</span>
+          </div>
+        </div>
+
+        <div class="bg-surface-container-lowest p-2.5 rounded-xl flex items-center justify-between font-mono text-xs">
+          <span class="text-outline">COMPOSITE RISK SCORE:</span>
+          <span id="approved-risk-score" class="text-secondary font-bold text-sm">14 / 100</span>
+        </div>
+      </div>
+
+      <!-- Action Dock -->
+      <div class="action-dock fixed bottom-0 w-full left-0 right-0 mx-auto p-space-base bg-surface/90 backdrop-blur-xl border-t border-surface-container-high flex flex-col gap-2 z-30">
+        <button type="button" id="btn-confirm-admit" class="w-full h-12 rounded-xl bg-secondary text-on-secondary font-bold text-sm uppercase tracking-wide hover:bg-secondary/90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-xl">
+          <span class="material-symbols-outlined text-[20px]">how_to_reg</span>
+          <span>CLEAR / ADMIT TRAVELER</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- SCREEN 6: RESULT (FLAGGED) -->
+    <section id="screen-flagged" class="screen-view hidden w-full flex flex-col pt-20 pb-36 px-space-base gap-space-base">
+      <!-- Elevated Risk Alert Header -->
+      <div class="w-full bg-error-container/20 border border-error/50 rounded-2xl p-space-base flex items-center gap-space-md">
+        <div class="w-12 h-12 rounded-xl bg-error-container flex items-center justify-center text-error shadow-lg">
+          <span class="material-symbols-outlined text-[28px]">warning</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="font-mono text-[10px] uppercase text-error font-bold tracking-wider">MANDATORY HUMAN ESCALATION</span>
+          <h2 class="text-base font-bold text-on-surface">SECONDARY SCREENING REQUIRED</h2>
+          <span class="font-mono text-[10px] text-tertiary">POLICY: NEVER AUTO-REJECT · OFFICER TRIAGE</span>
+        </div>
+      </div>
+
+      <!-- Traveler Bio Card with Anomaly Highlight -->
+      <div class="bg-surface-container rounded-2xl p-space-base border border-surface-container-high flex flex-col gap-space-md shadow-xl">
+        <div class="flex items-center gap-space-md">
+          <div class="relative">
+            <img id="flagged-photo" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200" alt="Traveler" class="w-16 h-20 rounded-xl object-cover border-2 border-error shadow-md">
+            <span class="absolute -top-1 -right-1 px-1 rounded bg-error font-mono text-[9px] text-on-error font-bold">ANOMALY</span>
+          </div>
+          <div class="flex flex-col flex-1">
+            <span class="font-mono text-[10px] text-tertiary uppercase font-bold">TRAVEL DOCUMENT</span>
+            <h3 class="text-lg font-bold text-on-surface" id="flagged-traveler-name">SUNIL THAPA</h3>
+            <span class="font-mono text-xs text-error font-bold" id="flagged-doc-num">NP882194</span>
+            <span class="text-xs text-on-surface-variant mt-0.5" id="flagged-nat">NPL (Nepal)</span>
+          </div>
+          <div class="flex flex-col items-center justify-center px-3 py-1.5 rounded-xl bg-surface-container-lowest border border-error/40 font-mono">
+            <span class="text-[9px] text-outline uppercase">RISK SCORE</span>
+            <span id="flagged-risk-score" class="text-xl font-bold text-error">78</span>
+          </div>
+        </div>
+
+        <!-- Flagged Anomalies Itemized List -->
+        <div class="flex flex-col gap-2 pt-2 border-t border-surface-container-highest/60">
+          <span class="font-mono text-[11px] uppercase tracking-wider text-tertiary font-semibold">DETAILED ANOMALY BREAKDOWN:</span>
+          <div id="flagged-anomalies-list" class="flex flex-col gap-2"></div>
+        </div>
+      </div>
+
+      <!-- Persistent Dual-Action Dock for Officer -->
+      <div class="action-dock fixed bottom-0 w-full left-0 right-0 mx-auto p-space-base bg-surface/95 backdrop-blur-xl border-t border-surface-container-high flex flex-col gap-2 z-30 shadow-2xl">
+        <button type="button" id="btn-escalate-secondary" class="w-full h-12 rounded-xl bg-tertiary text-on-tertiary font-bold text-sm uppercase tracking-wide hover:bg-tertiary/90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-xl">
+          <span class="material-symbols-outlined text-[20px]">assignment_late</span>
+          <span>FLAG FOR SECONDARY INSPECTION</span>
+        </button>
+        <button type="button" id="btn-officer-override" class="w-full h-11 rounded-xl bg-surface-container-highest text-on-surface font-semibold text-xs uppercase tracking-wide hover:bg-surface-container-high transition-all border border-outline-variant flex items-center justify-center gap-2">
+          <span class="material-symbols-outlined text-[18px]">verified_user</span>
+          <span>OVERRIDE &amp; ADMIT (OFFICER LOG NOTE)</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- SCREEN 7: REVIEW QUEUE -->
+    <section id="screen-queue" class="screen-view hidden w-full flex flex-col pt-20 pb-24 px-space-base gap-space-base">
+      <div class="flex items-center justify-between">
+        <div class="flex flex-col">
+          <h2 class="text-lg font-bold text-on-surface uppercase tracking-tight">Secondary Review Queue</h2>
+          <span id="queue-pending-count" class="font-mono text-xs text-tertiary">2 CASES REQUIRING ATTENTION</span>
+        </div>
+        <button type="button" onclick="window.app.renderReviewQueue()" class="p-2 rounded-lg bg-surface-container-high text-on-surface-variant hover:text-on-surface">
+          <span class="material-symbols-outlined text-[20px]">refresh</span>
+        </button>
+      </div>
+
+      <!-- Queue Items Container -->
+      <div id="queue-items-list" class="flex flex-col gap-space-sm"></div>
+    </section>
+
+    <!-- SCREEN 8: AUDIT LOG -->
+    <section id="screen-audit" class="screen-view hidden w-full flex flex-col pt-20 pb-24 px-space-base gap-space-base">
+      <div class="flex items-center justify-between">
+        <div class="flex flex-col">
+          <h2 class="text-lg font-bold text-on-surface uppercase tracking-tight">Cryptographic Ledger</h2>
+          <span id="audit-total-blocks" class="font-mono text-xs text-primary">IMMUTABLE HASH-CHAINED LOGS</span>
+        </div>
+        <button type="button" id="btn-verify-chain" class="px-3 py-1.5 rounded-lg bg-primary-container text-on-primary-container font-mono text-xs font-bold uppercase hover:bg-primary-container/80 transition-all flex items-center gap-1 shadow-md">
+          <span class="material-symbols-outlined text-[16px]">verified</span>
+          <span>VERIFY INTEGRITY</span>
+        </button>
+      </div>
+
+      <!-- Blocks Container -->
+      <div id="audit-blocks-list" class="flex flex-col gap-space-sm"></div>
+    </section>
+
+    <!-- SCREEN 9: OFFICER PROFILE & TERMINAL -->
+    <section id="screen-profile" class="screen-view hidden w-full flex flex-col pt-20 pb-24 px-space-base gap-space-base">
+      <div class="bg-surface-container rounded-2xl p-space-base border border-surface-container-high flex items-center gap-space-md shadow-xl">
+        <div class="w-14 h-14 rounded-full bg-surface-container-highest border-2 border-primary flex items-center justify-center text-primary font-bold font-mono text-xl">
+          RS
+        </div>
+        <div class="flex flex-col">
+          <h2 class="text-base font-bold text-on-surface">Insp. Rameshwar Singh</h2>
+          <span class="font-mono text-xs text-primary">SSB-7489-N · Lead Screener</span>
+          <span class="text-xs text-on-surface-variant mt-0.5">Panitanki Border CP-04 (Alpha Shift)</span>
+        </div>
+      </div>
+
+      <!-- Diagnostics & Network Simulation Controller -->
+      <div class="bg-surface-container-low rounded-2xl p-space-base border border-surface-container-high flex flex-col gap-space-sm font-mono text-xs">
+        <span class="text-outline uppercase text-[10px] font-bold">TERMINAL DIAGNOSTICS &amp; SYNC</span>
+        <div class="flex items-center justify-between py-1 border-b border-surface-container-highest">
+          <span class="text-on-surface-variant">Local Hash-Chain Integrity:</span>
+          <span class="text-secondary font-bold">100% Tamper-Evident</span>
+        </div>
+        <div class="flex items-center justify-between py-1 border-b border-surface-container-highest">
+          <span class="text-on-surface-variant">Edge Machine Inference:</span>
+          <span class="text-secondary font-bold">ON-DEVICE (0ms NET)</span>
+        </div>
+        <div class="flex items-center justify-between py-1 border-b border-surface-container-highest">
+          <span class="text-on-surface-variant">Active Storage Engine:</span>
+          <span class="text-primary font-bold">IndexedDB / LocalStorage</span>
+        </div>
+        <div class="flex items-center justify-between py-1">
+          <span class="text-on-surface-variant">Network Sync Mode:</span>
+          <span id="network-sim-status" class="text-secondary font-bold">ONLINE (AUTO-SYNC)</span>
+        </div>
+
+        <div class="pt-2">
+          <button type="button" id="network-toggle-btn" class="w-full py-2.5 rounded-lg bg-surface-container-highest text-on-surface font-title-sm text-xs font-semibold uppercase hover:bg-surface-container-high transition-all">
+            FORCE OFFLINE (TEST STORE &amp; FORWARD)
+          </button>
+        </div>
+      </div>
+
+      <button type="button" onclick="window.app.navigateTo('login')" class="w-full py-3 rounded-xl bg-error-container/40 text-error font-semibold text-xs uppercase tracking-wider hover:bg-error-container/60 transition-all border border-error/30 flex items-center justify-center gap-2">
+        <span class="material-symbols-outlined text-[18px]">logout</span>
+        <span>Lock Terminal &amp; Exit Shift</span>
+      </button>
+    </section>
+
+    <!-- BOTTOM TACTICAL NAVIGATION DOCK -->
+    <nav id="app-navigation" class="fixed bottom-0 w-full z-40 bg-surface/90 backdrop-blur-xl border-t border-surface-container-high">
+      <div class="h-16 px-space-xs flex items-center justify-around">
+        <button type="button" data-screen="dashboard" class="nav-btn flex flex-col items-center justify-center gap-0.5 text-on-surface-variant hover:text-primary transition-colors py-1 px-3">
+          <span class="nav-icon material-symbols-outlined text-[22px]">home</span>
+          <span class="nav-label font-mono text-[9px] uppercase font-semibold">Home</span>
+        </button>
+        <button type="button" data-screen="capture" class="nav-btn flex flex-col items-center justify-center gap-0.5 text-on-surface-variant hover:text-primary transition-colors py-1 px-3">
+          <span class="nav-icon material-symbols-outlined text-[22px]">document_scanner</span>
+          <span class="nav-label font-mono text-[9px] uppercase font-semibold">Scan</span>
+        </button>
+        <button type="button" data-screen="queue" class="nav-btn flex flex-col items-center justify-center gap-0.5 text-on-surface-variant hover:text-primary transition-colors py-1 px-3">
+          <span class="nav-icon material-symbols-outlined text-[22px]">rate_review</span>
+          <span class="nav-label font-mono text-[9px] uppercase font-semibold">Queue</span>
+        </button>
+        <button type="button" data-screen="audit" class="nav-btn flex flex-col items-center justify-center gap-0.5 text-on-surface-variant hover:text-primary transition-colors py-1 px-3">
+          <span class="nav-icon material-symbols-outlined text-[22px]">receipt_long</span>
+          <span class="nav-label font-mono text-[9px] uppercase font-semibold">Audit</span>
+        </button>
+        <button type="button" data-screen="profile" class="nav-btn flex flex-col items-center justify-center gap-0.5 text-on-surface-variant hover:text-primary transition-colors py-1 px-3">
+          <span class="nav-icon material-symbols-outlined text-[22px]">badge</span>
+          <span class="nav-label font-mono text-[9px] uppercase font-semibold">Officer</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- RETAKE MODAL (QUALITY GATE REJECTION SAFEGUARD) -->
+    <div id="retake-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+      <div class="bg-surface-container rounded-2xl p-space-base max-w-sm w-full border border-tertiary/50 shadow-2xl flex flex-col gap-3">
+        <div class="w-12 h-12 rounded-xl bg-tertiary/20 flex items-center justify-center text-tertiary">
+          <span class="material-symbols-outlined text-[28px]">photo_camera_back</span>
+        </div>
+        <h3 id="retake-modal-reason" class="text-base font-bold text-tertiary uppercase">CAPTURE RETAKE RECOMMENDED</h3>
+        <p id="retake-modal-advice" class="text-xs text-on-surface">Hold device steady and realign within the guide brackets.</p>
+        <div class="p-2 rounded bg-surface-container-lowest text-[11px] font-mono text-outline">
+          Policy: Document has NOT been rejected. Please recapture with optimal focus.
+        </div>
+        <button type="button" id="retake-modal-close" class="w-full py-2.5 rounded-xl bg-primary text-on-primary font-bold text-xs uppercase mt-1">
+          Recapture Image
+        </button>
+      </div>
+    </div>
+
+    <!-- HASH-CHAIN VERIFICATION CERTIFICATE MODAL -->
+    <div id="verify-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+      <div class="bg-surface-container rounded-2xl p-space-base max-w-sm w-full border border-secondary/50 shadow-2xl flex flex-col gap-3">
+        <div id="verify-modal-content"></div>
+        <button type="button" id="verify-modal-close" class="w-full py-2.5 rounded-xl bg-surface-container-highest text-on-surface font-semibold text-xs uppercase">
+          Close Verification Audit
+        </button>
+      </div>
+    </div>
+
+    <!-- FLOATING TOAST NOTIFICATION -->
+    <div id="app-toast" class="fixed top-20 left-4 right-4 max-w-md lg:max-w-lg mx-auto z-50 p-3 rounded-xl bg-surface-container-highest text-on-surface border border-secondary/60 text-xs font-mono shadow-2xl transition-all duration-300 transform opacity-0 translate-y-4 pointer-events-none flex items-center gap-2">
+      <span class="material-symbols-outlined text-secondary text-[18px]">verified</span>
+      <span class="toast-text flex-1">Clearance logged</span>
+    </div>
+
+  </div>
+
+  <!-- Application Logic Modules -->
+  <script type="module" src="./src/app.js"></script>
+
+  <!-- PWA Install Prompt Banner -->
+  <div id="pwa-install-banner" class="fixed bottom-20 left-4 right-4 max-w-md mx-auto z-50 p-4 rounded-2xl bg-surface-container-highest text-on-surface border border-primary/40 shadow-2xl transition-all duration-500 transform translate-y-[200%] opacity-0 pointer-events-none lg:bottom-4 lg:left-auto lg:right-8" style="backdrop-filter: blur(16px);">
+    <div class="flex items-center gap-3">
+      <div class="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center flex-shrink-0">
+        <img src="./assets/logo.svg" alt="" class="h-8 w-auto">
+      </div>
+      <div class="flex-1">
+        <p class="font-bold text-sm text-on-surface">Install DocuShield</p>
+        <p class="text-xs text-on-surface-variant">Add to home screen for offline access</p>
+      </div>
+      <button id="pwa-install-accept" class="px-4 py-2 rounded-xl bg-primary text-on-primary font-bold text-xs uppercase tracking-wide hover:bg-primary/90 transition-all flex-shrink-0">
+        Install
+      </button>
+      <button id="pwa-install-dismiss" class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface transition-colors flex-shrink-0">
+        <span class="material-symbols-outlined text-[18px]">close</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- PWA Service Worker Registration & Install Logic -->
+  <script>
+    // Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').then((reg) => {
+          console.log('DocuShield Service Worker active:', reg.scope);
+        }).catch((err) => {
+          console.log('Service Worker registration skipped:', err);
+        });
+      });
+    }
+
+    // PWA Install Prompt
+    let deferredInstallPrompt = null;
+    const banner = document.getElementById('pwa-install-banner');
+    const acceptBtn = document.getElementById('pwa-install-accept');
+    const dismissBtn = document.getElementById('pwa-install-dismiss');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      // Show banner with animation
+      setTimeout(() => {
+        banner.classList.remove('translate-y-[200%]', 'opacity-0', 'pointer-events-none');
+        banner.classList.add('translate-y-0', 'opacity-100', 'pointer-events-auto');
+      }, 2000); // Delay 2s so user sees the app first
+    });
+
+    acceptBtn?.addEventListener('click', async () => {
+      if (!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      const result = await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      hideBanner();
+    });
+
+    dismissBtn?.addEventListener('click', () => {
+      hideBanner();
+      // Don't show again for 24h
+      localStorage.setItem('pwa_install_dismissed', Date.now().toString());
+    });
+
+    function hideBanner() {
+      banner.classList.add('translate-y-[200%]', 'opacity-0', 'pointer-events-none');
+      banner.classList.remove('translate-y-0', 'opacity-100', 'pointer-events-auto');
+    }
+
+    // Check if dismissed recently
+    const dismissed = localStorage.getItem('pwa_install_dismissed');
+    if (dismissed && (Date.now() - parseInt(dismissed)) < 86400000) {
+      // Prevent showing banner for 24h after dismiss
+      window.removeEventListener('beforeinstallprompt', () => {});
+    }
+
+    window.addEventListener('appinstalled', () => {
+      hideBanner();
+      console.log('DocuShield PWA installed successfully');
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40" width="160" height="40" fill="none">
+  <g transform="translate(6, 6)">
+    <!-- Shield emblem -->
+    <path d="M14 2L25 6.5V15.5C25 21.8 19.8 26.8 14 28.5C8.2 26.8 3 21.8 3 15.5V6.5L14 2Z" fill="#1A1C1E" stroke="#5A7A99" stroke-width="2" stroke-linejoin="round"/>
+    <!-- Biometric fingerprint/document circuit lines inside shield -->
+    <path d="M14 8V12M14 15V22M9.5 12C9.5 14.5 18.5 14.5 18.5 17C18.5 19.5 14 21 14 21" stroke="#3FA98A" stroke-width="1.6" stroke-linecap="round"/>
+    <circle cx="14" cy="7" r="1.5" fill="#3FA98A"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="44" y="24" fill="#EDEDEC" font-family="'Inter', system-ui, -apple-system, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5">DOCUSHIELD</text>
+  <text x="44" y="33" fill="#5A7A99" font-family="'JetBrains Mono', monospace" font-size="7.5" font-weight="600" letter-spacing="2">BORDER COMMAND</text>
+</svg>

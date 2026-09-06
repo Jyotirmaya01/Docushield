@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Install DocuShield App</title>
+  <meta name="description" content="Download and install the DocuShield AI Border Document Screening app on your device.">
+  <meta name="theme-color" content="#111415">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface": "#111415",
+            "surface-container": "#1e2022",
+            "surface-container-high": "#282a2c",
+            "surface-container-highest": "#333537",
+            "on-surface": "#e2e2e5",
+            "on-surface-variant": "#c3c7ce",
+            "primary": "#a9caec",
+            "on-primary": "#0d334e",
+            "secondary": "#72d9b7",
+            "on-secondary": "#00382a",
+            "tertiary": "#ffb95a",
+            "outline": "#8c9198"
+          },
+          fontFamily: {
+            "sans": ["Inter", "system-ui", "sans-serif"],
+            "mono": ["JetBrains Mono", "monospace"]
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+    }
+    .float-anim { animation: float 3s ease-in-out infinite; }
+
+    @keyframes scan-line {
+      0% { top: 0%; opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { top: 100%; opacity: 0; }
+    }
+    .scan-line { animation: scan-line 2s ease-in-out infinite; }
+
+    .qr-container {
+      background: white;
+      padding: 16px;
+      border-radius: 16px;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body class="dark bg-surface text-on-surface font-sans min-h-screen flex flex-col items-center justify-center p-6 antialiased">
+
+  <div class="max-w-lg w-full flex flex-col items-center gap-8">
+
+    <!-- App Icon + Badge -->
+    <div class="relative float-anim">
+      <div class="w-24 h-24 rounded-[28px] bg-surface-container-high border-2 border-primary/30 flex items-center justify-center shadow-2xl">
+        <img src="./assets/logo.svg" alt="DocuShield" class="h-14 w-auto">
+      </div>
+      <span class="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-secondary text-on-secondary font-mono text-[10px] font-bold uppercase shadow-lg">PWA</span>
+    </div>
+
+    <!-- Title -->
+    <div class="text-center">
+      <h1 class="text-2xl sm:text-3xl font-extrabold uppercase tracking-tight text-on-surface">DocuShield</h1>
+      <p class="text-sm text-on-surface-variant mt-2 max-w-sm mx-auto">
+        AI-Powered Border Document Screening Console — works <span class="text-secondary font-semibold">100% offline</span> on any device.
+      </p>
+    </div>
+
+    <!-- Install Methods -->
+    <div class="w-full flex flex-col gap-4">
+
+      <!-- Direct Install Button (PWA) -->
+      <button id="install-btn" class="w-full py-4 rounded-2xl bg-primary text-on-primary font-bold text-base uppercase tracking-wide hover:bg-primary/90 active:scale-[0.99] transition-all flex items-center justify-center gap-3 shadow-xl hidden">
+        <span class="material-symbols-outlined text-[24px]">download</span>
+        <span>Install DocuShield App</span>
+      </button>
+
+      <!-- Fallback: Open in Browser -->
+      <a href="./index.html" class="w-full py-4 rounded-2xl bg-surface-container-high text-on-surface font-bold text-sm uppercase tracking-wide hover:bg-surface-container-highest transition-all flex items-center justify-center gap-3 border border-outline/20 shadow-lg text-center no-underline">
+        <span class="material-symbols-outlined text-[24px] text-primary">open_in_browser</span>
+        <span>Open in Browser</span>
+      </a>
+
+      <!-- QR Code Section -->
+      <div class="w-full flex flex-col items-center gap-4 pt-4 border-t border-surface-container-high">
+        <div class="flex items-center gap-2 text-on-surface-variant">
+          <span class="material-symbols-outlined text-[18px]">qr_code_scanner</span>
+          <span class="font-mono text-xs uppercase tracking-wider">Scan to install on another device</span>
+        </div>
+
+        <!-- QR Code - auto-generated -->
+        <div class="qr-container shadow-2xl relative overflow-hidden">
+          <canvas id="qr-canvas" width="200" height="200"></canvas>
+          <div class="scan-line absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-secondary to-transparent pointer-events-none"></div>
+        </div>
+
+        <p id="app-url" class="font-mono text-xs text-outline text-center break-all select-all cursor-pointer px-4"></p>
+      </div>
+    </div>
+
+    <!-- Instructions Grid -->
+    <div class="w-full grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-surface-container-high">
+      <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-surface-container border border-surface-container-high text-center">
+        <span class="material-symbols-outlined text-primary text-[28px]">smartphone</span>
+        <span class="text-xs font-semibold text-on-surface">Android</span>
+        <span class="text-[11px] text-on-surface-variant">Chrome → Menu → "Add to Home Screen"</span>
+      </div>
+      <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-surface-container border border-surface-container-high text-center">
+        <span class="material-symbols-outlined text-primary text-[28px]">phone_iphone</span>
+        <span class="text-xs font-semibold text-on-surface">iPhone / iPad</span>
+        <span class="text-[11px] text-on-surface-variant">Safari → Share → "Add to Home Screen"</span>
+      </div>
+      <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-surface-container border border-surface-container-high text-center">
+        <span class="material-symbols-outlined text-primary text-[28px]">laptop</span>
+        <span class="text-xs font-semibold text-on-surface">Desktop</span>
+        <span class="text-[11px] text-on-surface-variant">Chrome → Install icon in address bar</span>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <div class="w-full flex flex-col gap-2 text-xs text-on-surface-variant font-mono">
+      <div class="flex items-center gap-2"><span class="text-secondary">✓</span> Works 100% offline after install</div>
+      <div class="flex items-center gap-2"><span class="text-secondary">✓</span> On-device ML document verification</div>
+      <div class="flex items-center gap-2"><span class="text-secondary">✓</span> Tamper-proof SHA-256 audit logs</div>
+      <div class="flex items-center gap-2"><span class="text-secondary">✓</span> Store & forward sync when online</div>
+      <div class="flex items-center gap-2"><span class="text-secondary">✓</span> Responsive — mobile, tablet & desktop</div>
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center font-mono text-[10px] text-outline pt-4 border-t border-surface-container-high w-full">
+      <p>DocuShield v1.0 · SIH 2025 · Team Border Intelligence</p>
+      <p class="mt-1">SSB Border Command — Indo-Nepal Tactical Screening</p>
+    </div>
+  </div>
+
+  <!-- QR Code Generation Script (lightweight, no dependencies) -->
+  <script>
+    // Minimal QR code generator using canvas
+    // Uses the QR code API as a fallback for clean rendering
+    const APP_URL = window.location.href.replace(/install\.html.*$/, '');
+
+    document.getElementById('app-url').textContent = APP_URL;
+
+    // Generate QR code using a free API
+    const qrCanvas = document.getElementById('qr-canvas');
+    const qrImg = new Image();
+    qrImg.crossOrigin = 'anonymous';
+    qrImg.onload = function() {
+      const ctx = qrCanvas.getContext('2d');
+      ctx.drawImage(qrImg, 0, 0, 200, 200);
+    };
+    qrImg.onerror = function() {
+      // Fallback: show URL text if QR generation fails
+      const ctx = qrCanvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 200, 200);
+      ctx.fillStyle = '#111415';
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Scan QR or copy URL', 100, 90);
+      ctx.fillText('below to install', 100, 110);
+    };
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(APP_URL)}&bgcolor=ffffff&color=111415&format=png`;
+
+    // PWA Install Prompt
+    let deferredPrompt = null;
+    const installBtn = document.getElementById('install-btn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.classList.remove('hidden');
+    });
+
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const result = await deferredPrompt.userChoice;
+      if (result.outcome === 'accepted') {
+        installBtn.textContent = '✓ App Installed!';
+        installBtn.disabled = true;
+        installBtn.classList.add('opacity-60');
+      }
+      deferredPrompt = null;
+    });
+
+    window.addEventListener('appinstalled', () => {
+      installBtn.textContent = '✓ DocuShield Installed';
+      installBtn.disabled = true;
+      installBtn.classList.add('opacity-60');
+      deferredPrompt = null;
+    });
+  </script>
+</body>
+</html>
