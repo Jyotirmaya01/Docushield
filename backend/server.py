@@ -34,6 +34,11 @@ from database import (
     get_scan_detail,
     get_audit_log,
     get_dashboard_stats,
+    verify_officer,
+    verify_admin,
+    get_all_officers,
+    insert_officer,
+    toggle_officer_status,
 )
 
 
