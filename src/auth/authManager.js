@@ -13,6 +13,8 @@ import { BackendAPI } from '../api/backendClient.js';
 const STORAGE_OFFICERS_KEY = 'docushield_officers_db_v2';
 const STORAGE_ADMINS_KEY = 'docushield_admins_db_v2';
 const STORAGE_SESSION_KEY = 'docushield_active_session_v2';
+const STORAGE_SECTOR_CONFIG_KEY = 'docushield_sector_config_v2';
+const STORAGE_ADMIN_AUDIT_KEY = 'docushield_admin_audit_v2';
 
 export class AuthManager {
   /**
