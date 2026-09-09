@@ -11,6 +11,8 @@ export function getApiBase() {
   return `http://${host}:8000/api`;
 }
 
+const API_BASE = getApiBase();
+
 export class BackendAPI {
   /**
    * Check if backend is reachable
@@ -145,6 +147,70 @@ export class BackendAPI {
   }
 
   /**
+   * Send structured OCR extracted fields to backend SQLite.
+   * Step 4: Generic across passport, national_id, and visa.
+   * 
+   * @param {string} scanId - The scan UUID
+   * @param {Object} fieldsData - Structured fields (name, date_of_birth, document_number, nationality, gender, issue_date, expiry_date, mrz_raw, extra_fields)
+   */
+  static async saveExtractedFields(scanId, fieldsData) {
+    try {
+      const payload = {
+        record_id: scanId,
+        document_type: fieldsData.document_type || fieldsData.documentType || 'passport',
+        name: fieldsData.name || fieldsData.fullName || null,
+        date_of_birth: fieldsData.date_of_birth || fieldsData.dateOfBirth || null,
+        document_number: fieldsData.document_number || fieldsData.documentNumber || null,
+        nationality: fieldsData.nationality || null,
+        gender: fieldsData.gender || fieldsData.sex || null,
+        issue_date: fieldsData.issue_date || fieldsData.issueDate || null,
+        expiry_date: fieldsData.expiry_date || fieldsData.expiryDate || null,
+        mrz_raw: fieldsData.mrz_raw || null,
+        extra_fields: fieldsData.extra_fields || fieldsData.extraFields || {}
+      };
+
+      const resp = await fetch(`${API_BASE}/scans/${scanId}/extracted-fields`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (resp.ok) {
+        const result = await resp.json();
+        console.log('[API] ✅ Step 4: Structured OCR fields saved to SQLite for scan:', scanId);
+        return result;
+      } else {
+        const errText = await resp.text();
+        console.warn('[API] Extracted fields save rejected by SQLite:', resp.status, errText);
+      }
+    } catch (err) {
+      console.warn('[API] Extracted fields save failed (offline):', err.message);
+    }
+    return null;
+  }
+
+  /**
+   * Retrieve structured OCR extracted fields for a scan from backend SQLite.
+   * @param {string} scanId
+   * @returns {Promise<Object|null>}
+   */
+  static async getExtractedFields(scanId) {
+    try {
+      const resp = await fetch(`${API_BASE}/scans/${scanId}/extracted-fields`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (resp.ok) {
+        const result = await resp.json();
+        return result.extracted_fields || null;
+      }
+    } catch (err) {
+      console.warn('[API] Get extracted fields failed (offline):', err.message);
+    }
+    return null;
+  }
+
+  /**
    * Record an officer decision to backend.
    * 
    * @param {string} scanId - The scan UUID
@@ -215,16 +281,151 @@ export class BackendAPI {
   }
 
   /**
-   * Get audit log from database.
+   * Officer / Admin Authentication
    */
-  static async getAuditLog(limit = 100) {
+  static async login(officerId, password) {
     try {
-      const resp = await fetch(`${API_BASE}/audit?limit=${limit}`, {
+      const resp = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ officer_id: officerId, password: password }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (err) {
+      console.warn('[API] Login request failed:', err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Batch Audit Log Sync with Tamper-Evident Hash Verification
+   * Rejects images centrally; sends only lightweight metadata and hash-chain records.
+   */
+  static async syncAuditLog(entries, sessionToken = null) {
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+
+      const resp = await fetch(`${API_BASE}/sync/audit-log`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(entries),
+        signal: AbortSignal.timeout(10000),
+      });
+      return { ok: resp.ok, status: resp.status, data: await resp.json() };
+    } catch (err) {
+      console.warn('[API] Sync audit log failed:', err.message);
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /**
+   * Fast-lane Central Frequent-Crosser Lookup
+   */
+  static async lookupLedger(documentId, sessionToken = null) {
+    try {
+      const headers = {};
+      if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+
+      const resp = await fetch(`${API_BASE}/ledger/lookup?document_id=${encodeURIComponent(documentId)}`, {
+        headers,
+        signal: AbortSignal.timeout(4000),
+      });
+      if (resp.ok) return await resp.json();
+    } catch (err) {
+      console.warn('[API] Ledger lookup failed (will rely on local hash-chain):', err.message);
+    }
+    return null;
+  }
+
+  /**
+   * Update Central Frequent-Crosser Ledger after finalized decision
+   */
+  static async updateLedger(payload, sessionToken = null) {
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+
+      const resp = await fetch(`${API_BASE}/ledger/update`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(6000),
+      });
+      if (resp.ok) return await resp.json();
+    } catch (err) {
+      console.warn('[API] Ledger update failed (will sync later):', err.message);
+    }
+    return null;
+  }
+
+  /**
+   * Checkpoint Audit Log Query (Officer scope: assigned checkpoint)
+   */
+  static async getAuditLogByCheckpoint(checkpointId, sessionToken, limit = 50) {
+    try {
+      const resp = await fetch(`${API_BASE}/audit-log?checkpoint_id=${encodeURIComponent(checkpointId)}&limit=${limit}`, {
+        headers: { 'Authorization': `Bearer ${sessionToken}` },
         signal: AbortSignal.timeout(5000),
       });
       if (resp.ok) return await resp.json();
     } catch (err) {
-      console.warn('[API] Audit log failed:', err.message);
+      console.warn('[API] Get checkpoint audit log failed:', err.message);
+    }
+    return null;
+  }
+
+  /**
+   * Global Audit Log Query across all checkpoints (Admin access only)
+   */
+  static async getAllAuditLogs(sessionToken, limit = 100) {
+    try {
+      const resp = await fetch(`${API_BASE}/audit-log/all?limit=${limit}`, {
+        headers: { 'Authorization': `Bearer ${sessionToken}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (resp.ok) return await resp.json();
+    } catch (err) {
+      console.warn('[API] Get all audit logs failed:', err.message);
+    }
+    return null;
+  }
+
+  /**
+   * List all registered checkpoints (Admin)
+   */
+  static async getCheckpoints(sessionToken) {
+    try {
+      const resp = await fetch(`${API_BASE}/checkpoints`, {
+        headers: { 'Authorization': `Bearer ${sessionToken}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (resp.ok) return await resp.json();
+    } catch (err) {
+      console.warn('[API] Get checkpoints failed:', err.message);
+    }
+    return null;
+  }
+
+  /**
+   * Register a new checkpoint (Admin)
+   */
+  static async createCheckpoint(checkpointData, sessionToken) {
+    try {
+      const resp = await fetch(`${API_BASE}/checkpoints`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify(checkpointData),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (resp.ok) return await resp.json();
+    } catch (err) {
+      console.warn('[API] Create checkpoint failed:', err.message);
     }
     return null;
   }

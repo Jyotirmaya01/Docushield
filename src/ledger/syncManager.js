@@ -5,6 +5,7 @@
  */
 
 import { ledgerInstance } from './hashChain.js';
+import { BackendAPI } from '../api/backendClient.js';
 
 export class SyncManager {
   constructor() {
@@ -52,16 +53,43 @@ export class SyncManager {
 
   async flushQueue() {
     if (this.isSyncing || !this.isOnline()) return;
+
+    // Health check ping: never block if backend is down
+    const backendOnline = await BackendAPI.isAvailable();
+    if (!backendOnline) {
+      console.log('[SyncManager] Backend health check failed or offline; skipping batch sync.');
+      return;
+    }
+
     this.isSyncing = true;
     this.notify();
 
     try {
       const pending = await ledgerInstance.getPendingSyncBlocks();
-      if (pending.length > 0) {
-        // Simulate secure HTTPS push to Central Ministry of Home Affairs ledger node
-        await new Promise(resolve => setTimeout(resolve, 1200));
-        const indices = pending.map(b => b.index);
-        await ledgerInstance.markBlocksAsSynced(indices);
+      if (pending && pending.length > 0) {
+        // Map local hash-chain blocks into server-expected schema
+        const entries = pending.map(b => ({
+          record_id: b.docId ? `REC-${b.docId}-${b.index}` : `REC-BLOCK-${b.index}`,
+          checkpoint_id: b.checkpointId || 'CP-04-NORTH',
+          officer_id: b.officerId || 'SSB-7489-N',
+          timestamp: b.timestamp || new Date().toISOString(),
+          risk_score: b.riskScore || 0,
+          decision: b.decision || 'CLEARED',
+          prior_hash: b.prevHash,
+          entry_hash: b.hash,
+          traveler_name: b.travelerName || '',
+          nationality: b.nationality || '',
+          pathway: b.pathway || 'STANDARD_INSPECTION',
+        }));
+
+        const result = await BackendAPI.syncAuditLog(entries);
+        if (result && result.ok) {
+          console.log(`[SyncManager] Successfully flushed ${entries.length} blocks to central audit log.`);
+          const indices = pending.map(b => b.index);
+          await ledgerInstance.markBlocksAsSynced(indices);
+        } else {
+          console.warn('[SyncManager] Central audit sync rejected or failed:', result?.data || result?.error);
+        }
       }
     } catch (err) {
       console.error('Background sync encountered error:', err);

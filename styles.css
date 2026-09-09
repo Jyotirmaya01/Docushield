@@ -1,4 +1,5 @@
-/* DocuShield — Responsive Tactical Command Console Styles
+/* DocuShield — Border Security & Immigration Inspection Workstation
+   Professional, high-contrast, fatigue-free interface for border control officers.
    Breakpoints:
      Mobile    : < 640px   — full-width single column
      Tablet    : 640–1023px — 720px centered column
@@ -18,42 +19,42 @@ body {
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+  background-color: #0b1329;
+  color: #f1f5f9;
 }
 
 /* ============================
-   ANIMATIONS
+   SMOOTH TRANSITIONS & PULSE
    ============================ */
-@keyframes laser-sweep {
-  0%   { top: 8%;  opacity: 0.2; }
-  50%  {           opacity: 0.85; }
-  100% { top: 92%; opacity: 0.2; }
+@keyframes soft-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.98); }
 }
 
-@keyframes pulse-ring {
-  0%   { transform: scale(0.95); opacity: 0.8; }
-  50%  { transform: scale(1.15); opacity: 0.2; }
-  100% { transform: scale(0.95); opacity: 0.8; }
+@keyframes scan-guide-glow {
+  0%, 100% { border-color: rgba(59, 130, 246, 0.6); box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2); }
+  50% { border-color: rgba(16, 185, 129, 0.8); box-shadow: 0 0 15px rgba(16, 185, 129, 0.25); }
 }
 
-.animate-laser {
-  animation: laser-sweep 2.2s ease-in-out infinite alternate;
+.animate-soft-pulse {
+  animation: soft-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-.animate-pulse-ring {
-  animation: pulse-ring 2s ease-in-out infinite;
+.document-frame-active {
+  animation: scan-guide-glow 2.5s ease-in-out infinite;
 }
 
 /* ============================
-   CUSTOM SCROLLBAR
+   CLEAN BORDER WORKSTATION SCROLLBAR
    ============================ */
-::-webkit-scrollbar       { width: 5px; height: 5px; }
-::-webkit-scrollbar-track  { background: #111415; }
-::-webkit-scrollbar-thumb  { background: #333537; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #5a7a99; }
-* { scrollbar-width: thin; scrollbar-color: #333537 #111415; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0f172a; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+* { scrollbar-width: thin; scrollbar-color: #334155 #0f172a; }
 
 /* ============================
-   RETICLE BRACKET MARKS
+   DOCUMENT ALIGNMENT CORNER GUIDES
    ============================ */
 .bracket-mark {
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -72,12 +73,13 @@ body {
 }
 
 /* ============================
-   GLASSMORPHISM PANEL
+   OFFICER GLASS / SLATE PANEL
    ============================ */
 .glass-panel {
-  background: rgba(26, 28, 30, 0.85);
+  background: rgba(30, 41, 59, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 /* ============================
@@ -90,7 +92,7 @@ body {
   min-height: 100dvh;
   margin: 0 auto;
   position: relative;
-  background-color: #111415;
+  background-color: #0b1329;
   display: flex;
   flex-direction: column;
 }
@@ -99,9 +101,9 @@ body {
 @media (min-width: 640px) and (max-width: 1023px) {
   .app-container {
     max-width: 720px;
-    border-left: 1px solid #282a2c;
-    border-right: 1px solid #282a2c;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    border-left: 1px solid #1e293b;
+    border-right: 1px solid #1e293b;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -109,7 +111,7 @@ body {
 @media (min-width: 1024px) {
   .app-container {
     max-width: 100%;
-    margin-left: 220px;
+    margin-left: 240px;
     border: none;
     box-shadow: none;
   }
@@ -146,8 +148,8 @@ body {
 /* Desktop — offset by sidebar width */
 @media (min-width: 1024px) {
   #app-header {
-    left: 220px;
-    width: calc(100% - 220px);
+    left: 240px;
+    width: calc(100% - 240px);
     max-width: none;
     transform: none;
   }
@@ -180,7 +182,6 @@ body {
     padding-right: 3rem;
   }
 
-  /* Cap content width on very large monitors */
   #screen-approved,
   #screen-flagged,
   #screen-processing {
@@ -208,20 +209,20 @@ body {
   }
 }
 
-/* Desktop — transform into a vertical left sidebar */
+/* Desktop — transform into a clean left sidebar */
 @media (min-width: 1024px) {
   #app-navigation {
     top: 0;
     bottom: 0;
     left: 0;
     right: auto;
-    width: 220px;
-    max-width: 220px;
+    width: 240px;
+    max-width: 240px;
     height: 100vh;
     height: 100dvh;
     border-top: none;
-    border-right: 1px solid #282a2c;
-    background: rgba(12, 14, 16, 0.98);
+    border-right: 1px solid #1e293b;
+    background: #0f172a;
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     overflow-y: auto;
@@ -233,22 +234,22 @@ body {
     height: 100%;
     justify-content: flex-start;
     align-items: stretch;
-    padding: 80px 12px 24px;
-    gap: 4px;
+    padding: 84px 16px 24px;
+    gap: 6px;
   }
 
-  /* Sidebar branding block */
+  /* Sidebar header brand badge */
   #app-navigation > div::before {
-    content: 'DOCUSHIELD';
+    content: 'BORDER INSPECTION';
     display: block;
     font-family: 'Inter', system-ui, sans-serif;
-    font-size: 13px;
-    font-weight: 800;
-    letter-spacing: 0.15em;
-    color: #a9caec;
-    padding: 0 8px 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: #64748b;
+    padding: 0 12px 16px;
     margin-bottom: 8px;
-    border-bottom: 1px solid #282a2c;
+    border-bottom: 1px solid #1e293b;
     text-transform: uppercase;
   }
 
@@ -257,19 +258,21 @@ body {
     flex-direction: row;
     justify-content: flex-start;
     align-items: center;
-    padding: 11px 16px;
+    padding: 12px 16px;
     gap: 12px;
     border-radius: 12px;
     width: 100%;
   }
 
   #app-navigation .nav-btn:hover {
-    background: rgba(30, 32, 34, 0.9);
+    background: #1e293b;
   }
 
   #app-navigation .nav-label {
-    font-size: 12px;
-    letter-spacing: 0.04em;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
   }
 }
 
@@ -293,9 +296,9 @@ body {
 /* Desktop — offset by sidebar */
 @media (min-width: 1024px) {
   .action-dock {
-    left: 220px !important;
+    left: 240px !important;
     right: auto !important;
-    width: calc(100% - 220px) !important;
+    width: calc(100% - 240px) !important;
     max-width: none !important;
     transform: none;
     padding-left: 2.5rem !important;
@@ -316,11 +319,10 @@ body {
   #screen-dashboard:not(.hidden) {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+    gap: 1.25rem;
     align-items: start;
   }
 
-  /* Metrics deck spans both columns */
   #metrics-deck {
     grid-column: 1 / -1;
   }
@@ -377,11 +379,10 @@ body {
   #screen-profile:not(.hidden) {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+    gap: 1.25rem;
     align-items: start;
   }
 
-  /* Logout button spans full width */
   #screen-profile > button:last-of-type {
     grid-column: 1 / -1;
   }
@@ -396,7 +397,7 @@ body {
   }
 
   #screen-login > * {
-    max-width: 440px;
+    max-width: 480px;
     width: 100%;
   }
 }
@@ -407,7 +408,7 @@ body {
 @media (min-width: 768px) {
   #retake-modal > div,
   #verify-modal > div {
-    max-width: 480px;
+    max-width: 500px;
   }
 }
 
@@ -416,7 +417,7 @@ body {
    ============================ */
 @media (min-width: 1024px) {
   #app-toast {
-    left: 240px;
+    left: 260px;
     right: auto;
   }
 }
@@ -449,9 +450,9 @@ body {
    FOCUS VISIBILITY (Keyboard Navigation)
    ============================ */
 :focus-visible {
-  outline: 2px solid #a9caec;
+  outline: 2px solid #3b82f6;
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 /* ============================
@@ -459,7 +460,7 @@ body {
    ============================ */
 @media (hover: hover) {
   .nav-btn:hover .nav-icon {
-    color: #a9caec;
+    color: #3b82f6;
     transition: color 0.2s ease;
   }
 }

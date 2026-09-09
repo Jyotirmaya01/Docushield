@@ -64,6 +64,10 @@ npx serve .
 
 ## 🏗️ Architecture
 
+![DocuShield System Architecture](assets/DocuShield_Final_System_Architecture.svg)
+
+The DocuShield system architecture follows a high-throughput, offline-first forensic pipeline with frequent-crosser fast lanes, mandatory human adjudication, and immutable cryptographic audit logging.
+
 ```
 Docushield/
 ├── index.html              # Main SPA shell (all screens)

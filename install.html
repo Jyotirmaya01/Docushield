@@ -10,33 +10,40 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="./assets/tailwindcss.js"></script>
   <script>
-    tailwind.config = {
-      darkMode: "class",
-      theme: {
-        extend: {
-          colors: {
-            "surface": "#111415",
-            "surface-container": "#1e2022",
-            "surface-container-high": "#282a2c",
-            "surface-container-highest": "#333537",
-            "on-surface": "#e2e2e5",
-            "on-surface-variant": "#c3c7ce",
-            "primary": "#a9caec",
-            "on-primary": "#0d334e",
-            "secondary": "#72d9b7",
-            "on-secondary": "#00382a",
-            "tertiary": "#ffb95a",
-            "outline": "#8c9198"
-          },
-          fontFamily: {
-            "sans": ["Inter", "system-ui", "sans-serif"],
-            "mono": ["JetBrains Mono", "monospace"]
+    if (typeof tailwind === 'undefined') {
+      document.write('<script src="https://cdn.tailwindcss.com"><\/script>');
+    }
+  </script>
+  <script>
+    if (typeof tailwind !== 'undefined') {
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface": "#111415",
+              "surface-container": "#1e2022",
+              "surface-container-high": "#282a2c",
+              "surface-container-highest": "#333537",
+              "on-surface": "#e2e2e5",
+              "on-surface-variant": "#c3c7ce",
+              "primary": "#a9caec",
+              "on-primary": "#0d334e",
+              "secondary": "#72d9b7",
+              "on-secondary": "#00382a",
+              "tertiary": "#ffb95a",
+              "outline": "#8c9198"
+            },
+            fontFamily: {
+              "sans": ["Inter", "system-ui", "sans-serif"],
+              "mono": ["JetBrains Mono", "monospace"]
+            }
           }
         }
-      }
-    };
+      };
+    }
   </script>
   <style>
     @keyframes float {
@@ -91,7 +98,7 @@
       </button>
 
       <!-- Fallback: Open in Browser -->
-      <a href="./index.html" class="w-full py-4 rounded-2xl bg-surface-container-high text-on-surface font-bold text-sm uppercase tracking-wide hover:bg-surface-container-highest transition-all flex items-center justify-center gap-3 border border-outline/20 shadow-lg text-center no-underline">
+      <a href="/" class="w-full py-4 rounded-2xl bg-surface-container-high text-on-surface font-bold text-sm uppercase tracking-wide hover:bg-surface-container-highest transition-all flex items-center justify-center gap-3 border border-outline/20 shadow-lg text-center no-underline">
         <span class="material-symbols-outlined text-[24px] text-primary">open_in_browser</span>
         <span>Open in Browser</span>
       </a>

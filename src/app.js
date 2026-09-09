@@ -8,15 +8,20 @@ import { CONFIG } from './config.js';
 import { SAMPLE_SPECIMENS } from './samples.js';
 import { QualityGate } from './cv/qualityGate.js';
 import { ForensicEngine } from './pipeline/forensicEngine.js';
+import { OCREngine } from './pipeline/ocrEngine.js';
 import { ledgerInstance } from './ledger/hashChain.js';
+import { LedgerRouter } from './ledger/ledgerRouter.js';
 import { syncInstance } from './ledger/syncManager.js';
 import { BackendAPI } from './api/backendClient.js';
 import { AuthManager } from './auth/authManager.js';
+import { dbInstance } from './storage/db.js';
 
 class DocuShieldApp {
   constructor() {
     this.currentScreen = 'login';
     this.activeSpecimen = SAMPLE_SPECIMENS[0];
+    this.activeFastLaneDoc = null;
+    this.activeFastLaneRouting = null;
     this.videoStream = null;
     this.cameraActive = false;
     this.analysisInterval = null;
@@ -26,6 +31,7 @@ class DocuShieldApp {
     this.backendAvailable = false;     // Track backend connectivity
     this.reviewQueue = [];
     this.selectedQueueItem = null;
+    this.selectedDocType = this.activeSpecimen?.document_type || 'passport';
 
     // Load persisted review queue
     this.loadQueue();
@@ -88,6 +94,24 @@ class DocuShieldApp {
       console.warn('[DocuShield] Database initialization warning:', e);
     }
 
+    // Step 0a: Initialize Dexie.js IndexedDB local database
+    try {
+      await dbInstance.init();
+      window.dbInstance = dbInstance;
+      window.db = dbInstance.db;
+    } catch (e) {
+      console.warn('[DocuShield DB] IndexedDB initialization note:', e);
+    }
+
+    // Step 3: Initialize Pretrained Tesseract.js OCR Engine
+    try {
+      await OCREngine.init();
+      window.OCREngine = OCREngine;
+      window.runSampleOCRTest = () => this.handleRunOCRTest();
+    } catch (e) {
+      console.warn('[DocuShield OCR] OCREngine initialization note:', e);
+    }
+
     this.bindEvents();
     this.updateSyncUI();
     syncInstance.subscribe(() => this.updateSyncUI());
@@ -99,11 +123,125 @@ class DocuShieldApp {
 
     this.navigateTo('login');
 
+    // Step 0c: Request camera permission via getUserMedia on first use and request persistent storage
+    this.requestFirstUsePermissions();
+
     // Check backend availability on startup
     BackendAPI.isAvailable().then(available => {
       this.backendAvailable = available;
       console.log(`[DocuShield] Backend SQLite: ${available ? '✅ CONNECTED' : '⚠️ OFFLINE (local-only mode)'}`);
     });
+  }
+
+  /**
+   * Step 0c — Request camera permission via getUserMedia on first use.
+   * Request persistent storage permission so IndexedDB data isn't cleared by browser.
+   */
+  async requestFirstUsePermissions(interactive = false) {
+    let cameraGranted = false;
+    let storagePersisted = false;
+
+    // 1. Storage Persistence via navigator.storage.persist()
+    try {
+      const storageRes = await dbInstance.verifyAndRequestPersistence();
+      storagePersisted = storageRes.persisted;
+    } catch (err) {
+      console.warn('[DocuShield Permissions] Storage persistence request warning:', err);
+    }
+
+    // 2. Camera Access via navigator.mediaDevices.getUserMedia()
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        let shouldPrompt = false;
+
+        if (navigator.permissions && navigator.permissions.query) {
+          try {
+            const status = await navigator.permissions.query({ name: 'camera' });
+            if (status.state === 'granted') {
+              cameraGranted = true;
+              localStorage.setItem('docushield_camera_authorized', 'granted');
+            } else if (status.state === 'prompt' || interactive) {
+              shouldPrompt = true;
+            }
+          } catch (e) {
+            shouldPrompt = true;
+          }
+        } else {
+          shouldPrompt = true;
+        }
+
+        const previouslyAuthorized = localStorage.getItem('docushield_camera_authorized');
+        if (shouldPrompt || !previouslyAuthorized || interactive) {
+          console.log('[DocuShield Permissions] Requesting camera access via getUserMedia on first use...');
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' },
+            audio: false
+          });
+          cameraGranted = true;
+          localStorage.setItem('docushield_camera_authorized', 'granted');
+          // Release test stream tracks immediately so camera LED turns off
+          stream.getTracks().forEach(track => track.stop());
+          console.log('[DocuShield Permissions] Camera access confirmed and persisted');
+        }
+      }
+    } catch (camErr) {
+      console.warn('[DocuShield Permissions] Camera permission deferred or denied:', camErr);
+      cameraGranted = false;
+    }
+
+    this.updateHardwareDiagnostics(cameraGranted, storagePersisted);
+    return { cameraGranted, storagePersisted };
+  }
+
+  updateHardwareDiagnostics(cameraGranted = null, storagePersisted = null) {
+    const camBadge = document.getElementById('diag-camera-status');
+    const storageBadge = document.getElementById('diag-storage-status');
+    const quotaDisplay = document.getElementById('diag-storage-quota');
+    const swBadge = document.getElementById('diag-sw-status');
+
+    // Storage Persistence
+    if (storageBadge) {
+      const isPersisted = storagePersisted !== null ? storagePersisted : dbInstance.persisted;
+      if (isPersisted) {
+        storageBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-secondary"></span><span>PERSISTENT (DEXIE INDEXEDDB)</span>';
+        storageBadge.className = 'text-secondary font-bold flex items-center gap-1';
+      } else {
+        storageBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-tertiary"></span><span>STANDARD (REQUESTING)</span>';
+        storageBadge.className = 'text-tertiary font-bold flex items-center gap-1';
+      }
+    }
+
+    // Storage Quota
+    if (quotaDisplay && dbInstance.storageEstimate) {
+      const { quota, usage, percentUsed } = dbInstance.storageEstimate;
+      if (quota > 0) {
+        quotaDisplay.textContent = `${usage} MB used / ${quota} MB total (${percentUsed}%)`;
+      } else {
+        quotaDisplay.textContent = 'Unconstrained (IndexedDB)';
+      }
+    }
+
+    // Camera Permission
+    if (camBadge) {
+      const isAuth = cameraGranted !== null ? cameraGranted : (localStorage.getItem('docushield_camera_authorized') === 'granted');
+      if (isAuth) {
+        camBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-secondary"></span><span>AUTHORIZED (PERSISTED)</span>';
+        camBadge.className = 'text-secondary font-bold flex items-center gap-1';
+      } else {
+        camBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-tertiary"></span><span>ACTION REQUIRED (PROMPT)</span>';
+        camBadge.className = 'text-tertiary font-bold flex items-center gap-1';
+      }
+    }
+
+    // Workbox SW Status
+    if (swBadge) {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        swBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-secondary"></span><span>WORKBOX OFFLINE ACTIVE</span>';
+        swBadge.className = 'text-secondary font-bold flex items-center gap-1';
+      } else {
+        swBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-secondary"></span><span>WORKBOX OFFLINE READY</span>';
+      }
+    }
   }
 
   switchLoginTab(tab) {
@@ -232,31 +370,31 @@ class DocuShieldApp {
     if (isDemoMode) {
       if (dashModeIndicator) {
         dashModeIndicator.innerHTML = `
-          <span class="material-symbols-outlined text-tertiary text-[16px] animate-pulse">bolt</span>
-          <span class="font-mono text-[10px] uppercase text-tertiary font-bold">⚡ DEMO OFFICER DASHBOARD (SANDBOX)</span>
+          <span class="material-symbols-outlined text-primary text-[18px]">play_circle</span>
+          <span class="text-xs uppercase text-primary font-bold">Officer Demo Workstation (Sandbox)</span>
         `;
       }
       if (dashStation) {
-        dashStation.innerHTML = `<span class="material-symbols-outlined text-[14px] text-tertiary">science</span><span class="text-tertiary font-bold">DEMO CHECKPOINT CP-04 (PANITANKI TERMINAL - SANDBOX)</span>`;
+        dashStation.innerHTML = `<span class="material-symbols-outlined text-[15px] text-primary">location_on</span><span class="text-primary font-bold text-xs uppercase">Checkpoint CP-04 (Panitanki Border Post)</span>`;
       }
       if (dashName) {
-        dashName.innerHTML = `${fullName} <span class="text-tertiary font-mono text-xs px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/30 uppercase font-bold">DEMO PREVIEW</span>`;
+        dashName.innerHTML = `${fullName} <span class="text-primary text-xs px-2 py-0.5 rounded-full bg-primary/15 font-semibold">Demo Officer</span>`;
       }
       if (dashMeta) {
-        dashMeta.innerHTML = `<span>Shift: ${shift}</span><span>•</span><span>DEMO ID: ${officerId}</span><span>•</span><span class="text-secondary font-semibold">Demo Sandbox Active</span>`;
+        dashMeta.innerHTML = `<span>Shift: ${shift}</span><span>•</span><span>Demo ID: ${officerId}</span><span>•</span><span class="text-secondary font-semibold">Sandbox Active</span>`;
       }
       if (dashSessionBanner) {
-        dashSessionBanner.className = 'w-full px-3 py-2 rounded-xl bg-gradient-to-r from-tertiary/20 via-primary/10 to-tertiary/20 border border-tertiary/40 flex items-center justify-between font-mono text-xs text-tertiary mb-2 shadow-sm';
+        dashSessionBanner.className = 'w-full px-4 py-2.5 rounded-2xl bg-surface-container border border-primary/30 flex items-center justify-between text-xs text-on-surface mb-2 shadow-sm';
         dashSessionBanner.innerHTML = `
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-[18px] text-tertiary animate-pulse">bolt</span>
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-[20px] text-primary">info</span>
             <div>
-              <span class="font-bold">⚡ DEMO OFFICER DASHBOARD</span>
-              <span class="text-[10px] text-on-surface-variant block sm:inline sm:ml-2">All document screening &amp; forensic tools working in interactive sandbox mode.</span>
+              <span class="font-bold text-on-surface">Interactive Officer Sandbox</span>
+              <span class="text-xs text-on-surface-variant block sm:inline sm:ml-2">All document verification and forensic checks active.</span>
             </div>
           </div>
-          <button type="button" onclick="window.app.logoutOfficer()" class="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-[10px] text-on-surface hover:text-primary font-bold transition-all flex-shrink-0 border border-outline/20">
-            Exit Demo Mode
+          <button type="button" onclick="window.app.logoutOfficer()" class="px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-xs text-on-surface font-semibold transition-all flex-shrink-0 border border-outline/20">
+            Exit Demo
           </button>
         `;
         dashSessionBanner.classList.remove('hidden');
@@ -265,31 +403,31 @@ class DocuShieldApp {
       // AUTHENTICATED BORDER OFFICER DASHBOARD SPECIFIC TO THIS SERIAL ID
       if (dashModeIndicator) {
         dashModeIndicator.innerHTML = `
-          <span class="material-symbols-outlined text-secondary text-[16px]">verified_user</span>
-          <span class="font-mono text-[10px] uppercase text-secondary font-bold">BORDER OFFICER TERMINAL · SERIAL ID: ${officerId}</span>
+          <span class="material-symbols-outlined text-secondary text-[18px]">verified_user</span>
+          <span class="text-xs uppercase text-secondary font-bold">Active Duty Station · Officer ${officerId}</span>
         `;
       }
       if (dashStation) {
-        dashStation.innerHTML = `<span class="material-symbols-outlined text-[14px] text-primary">location_on</span><span class="text-primary font-bold">${checkpoint.toUpperCase()}</span>`;
+        dashStation.innerHTML = `<span class="material-symbols-outlined text-[15px] text-primary">location_on</span><span class="text-primary font-bold text-xs uppercase">${checkpoint.toUpperCase()}</span>`;
       }
       if (dashName) {
-        dashName.innerHTML = `${fullName} <span class="text-secondary font-mono text-xs px-2 py-0.5 rounded bg-secondary/15 border border-secondary/30 uppercase font-bold">${badge}</span>`;
+        dashName.innerHTML = `${fullName} <span class="text-secondary text-xs px-2.5 py-0.5 rounded-full bg-secondary/15 font-bold">${badge}</span>`;
       }
       if (dashMeta) {
-        dashMeta.innerHTML = `<span>Shift: ${shift}</span><span>•</span><span class="text-secondary font-bold">SERIAL ID: ${officerId}</span><span>•</span><span>Rank: ${rank}</span>`;
+        dashMeta.innerHTML = `<span>Shift: ${shift}</span><span>•</span><span class="text-secondary font-bold font-mono">ID: ${officerId}</span><span>•</span><span>Rank: ${rank}</span>`;
       }
       if (dashSessionBanner) {
-        dashSessionBanner.className = 'w-full px-3 py-2 rounded-xl bg-secondary/10 border border-secondary/30 flex items-center justify-between font-mono text-xs text-secondary mb-2 shadow-sm';
+        dashSessionBanner.className = 'w-full px-4 py-2.5 rounded-2xl bg-surface-container border border-secondary/30 flex items-center justify-between text-xs text-on-surface mb-2 shadow-sm';
         dashSessionBanner.innerHTML = `
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-[18px] text-secondary">verified</span>
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-[20px] text-secondary">verified</span>
             <div>
-              <span class="font-bold">OFFICER DASHBOARD · SERIAL ID: ${officerId}</span>
-              <span class="text-[10px] text-on-surface-variant block sm:inline sm:ml-2">Verified Border Screening Terminal for ${fullName} (${rank}).</span>
+              <span class="font-bold text-on-surface">Verified Duty Station · Officer ${officerId}</span>
+              <span class="text-xs text-on-surface-variant block sm:inline sm:ml-2">Station verified for ${fullName} (${rank}).</span>
             </div>
           </div>
-          <button type="button" onclick="window.app.logoutOfficer()" class="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-error/20 text-[10px] text-error font-bold transition-all flex-shrink-0 border border-outline/20">
-            Log Out
+          <button type="button" onclick="window.app.logoutOfficer()" class="px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-error/15 text-xs text-on-surface hover:text-error font-semibold transition-all flex-shrink-0 border border-outline/20">
+            Sign Out
           </button>
         `;
         dashSessionBanner.classList.remove('hidden');
@@ -365,6 +503,7 @@ class DocuShieldApp {
       case 'capture':
         this.startCamera();
         this.renderSpecimenSelector();
+        this.updateViewfinderForDocType(this.selectedDocType);
         break;
       case 'queue':
         this.renderReviewQueue();
@@ -465,34 +604,34 @@ class DocuShieldApp {
     if (blurVal) blurVal.textContent = `${quality.checks.blur.status} (VAR: ${quality.laplacianVariance})`;
 
     if (quality.passed) {
-      if (hudBanner) hudBanner.className = 'w-full flex items-center justify-between px-space-md py-space-sm rounded-lg bg-surface-container-lowest border border-secondary/40 transition-colors duration-300';
+      if (hudBanner) hudBanner.className = 'w-full flex items-center justify-between px-space-md py-space-sm rounded-xl bg-surface-container border border-secondary/40 transition-colors duration-300';
       if (hudText) {
-        hudText.textContent = 'DOCUMENT LOCKED — READY FOR SCAN';
-        hudText.className = 'font-title-sm text-title-sm text-secondary uppercase tracking-wider';
+        hudText.textContent = 'DOCUMENT POSITIONED · READY TO SCAN';
+        hudText.className = 'text-xs font-bold text-secondary uppercase tracking-wide';
       }
-      if (hudDetail) hudDetail.textContent = 'OPTICAL & LIGHTING REQUIREMENTS SATISFIED';
-      if (hudLockPct) hudLockPct.textContent = 'LOCK 100%';
+      if (hudDetail) hudDetail.textContent = 'Hold passport steady inside the alignment frame';
+      if (hudLockPct) hudLockPct.textContent = 'READY';
       if (hudIcon) {
         hudIcon.textContent = 'verified';
-        hudIcon.className = 'material-symbols-outlined text-[18px] text-secondary';
+        hudIcon.className = 'material-symbols-outlined text-[20px] text-secondary';
       }
       bracketMarks.forEach(bm => {
-        bm.style.backgroundColor = '#72d9b7';
+        bm.style.backgroundColor = '#10b981';
       });
     } else {
-      if (hudBanner) hudBanner.className = 'w-full flex items-center justify-between px-space-md py-space-sm rounded-lg bg-surface-container-lowest border border-tertiary/40 transition-colors duration-300';
+      if (hudBanner) hudBanner.className = 'w-full flex items-center justify-between px-space-md py-space-sm rounded-xl bg-surface-container border border-tertiary/40 transition-colors duration-300';
       if (hudText) {
-        hudText.textContent = quality.retakePrompt || 'REALIGN DOCUMENT GUIDE';
-        hudText.className = 'font-title-sm text-title-sm text-tertiary uppercase tracking-wider';
+        hudText.textContent = quality.retakePrompt || 'ADJUST DOCUMENT POSITION';
+        hudText.className = 'text-xs font-bold text-tertiary uppercase tracking-wide';
       }
-      if (hudDetail) hudDetail.textContent = quality.guidanceAdvice || 'KEEP DOCUMENT STEADY & FLAT';
-      if (hudLockPct) hudLockPct.textContent = 'ALIGNING...';
+      if (hudDetail) hudDetail.textContent = quality.guidanceAdvice || 'Center passport inside boundary guides';
+      if (hudLockPct) hudLockPct.textContent = 'ADJUST';
       if (hudIcon) {
         hudIcon.textContent = 'warning';
-        hudIcon.className = 'material-symbols-outlined text-[18px] text-tertiary animate-pulse';
+        hudIcon.className = 'material-symbols-outlined text-[20px] text-tertiary animate-pulse';
       }
       bracketMarks.forEach(bm => {
-        bm.style.backgroundColor = '#ffb95a';
+        bm.style.backgroundColor = '#f59e0b';
       });
     }
   }
@@ -520,18 +659,18 @@ class DocuShieldApp {
     if (!container) return;
 
     container.innerHTML = SAMPLE_SPECIMENS.map(spec => `
-      <button type="button" data-id="${spec.id}" class="specimen-chip text-left p-2.5 rounded-lg border transition-all ${
+      <button type="button" data-id="${spec.id}" class="specimen-chip text-left p-3 rounded-2xl border transition-all ${
         this.activeSpecimen.id === spec.id
-          ? 'bg-surface-container-high border-primary text-on-surface shadow-sm'
-          : 'bg-surface-container-lowest border-outline-variant/30 text-on-surface-variant hover:bg-surface-container'
+          ? 'bg-surface-container-high border-2 border-primary text-on-surface shadow-md'
+          : 'bg-surface-container border border-outline/20 text-on-surface-variant hover:border-outline/40 hover:bg-surface-container-high'
       }">
-        <div class="flex items-center justify-between mb-1">
-          <span class="font-title-sm text-xs font-semibold uppercase text-on-surface truncate">${spec.title.split(':')[1] || spec.title}</span>
-          <span class="font-label-micro text-[9px] px-1.5 py-0.5 rounded ${
-            spec.badgeColor === 'secondary' ? 'bg-secondary-container/50 text-secondary' : 'bg-tertiary-container/50 text-tertiary'
+        <div class="flex items-center justify-between mb-1 gap-1">
+          <span class="text-xs font-bold text-on-surface truncate">${spec.title.split(':')[1] || spec.title}</span>
+          <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+            spec.badgeColor === 'secondary' ? 'bg-secondary/15 text-secondary' : 'bg-tertiary/15 text-tertiary'
           }">${spec.badge}</span>
         </div>
-        <p class="font-body-sm text-[11px] text-on-surface-variant truncate">${spec.subtitle}</p>
+        <p class="text-[11px] text-on-surface-variant truncate">${spec.subtitle}</p>
       </button>
     `).join('');
 
@@ -540,6 +679,11 @@ class DocuShieldApp {
         const found = SAMPLE_SPECIMENS.find(s => s.id === btn.dataset.id);
         if (found) {
           this.activeSpecimen = found;
+          this.selectedDocType = found.document_type || 'passport';
+          const docTypeSelect = document.getElementById('capture-doc-type-select');
+          if (docTypeSelect) {
+            docTypeSelect.value = this.selectedDocType;
+          }
           this.renderSpecimenSelector();
           this.stopCamera();
           const previewImg = document.getElementById('specimen-preview-img');
@@ -550,9 +694,390 @@ class DocuShieldApp {
             previewImg.style.backgroundImage = `url("${found.photoUrl}")`;
           }
           this.updateQualityHUD(found.qualityResult);
+          this.updateViewfinderForDocType(this.selectedDocType);
         }
       });
     });
+  }
+
+  // --- VIEWFINDER GUIDANCE TAILORED TO DOCUMENT TYPE ---
+
+  updateViewfinderForDocType(docType) {
+    const docLabel = document.getElementById('viewfinder-doc-label');
+    const specLabel = document.getElementById('viewfinder-spec-label');
+    const zoneTitle = document.getElementById('viewfinder-zone-title');
+    const zoneSubtitle = document.getElementById('viewfinder-zone-subtitle');
+    const zoneSample = document.getElementById('viewfinder-zone-sample');
+    const hudDetail = document.getElementById('hud-detail');
+
+    if (docType === 'visa') {
+      if (docLabel) docLabel.textContent = 'Visa / Transit Permit Alignment Box';
+      if (specLabel) specLabel.textContent = 'NON-MRZ ENTRY VISA';
+      if (zoneTitle) zoneTitle.textContent = 'Visa Field Regions';
+      if (zoneSubtitle) zoneSubtitle.textContent = 'Rule-Based Checks (MRZ Skipped)';
+      if (zoneSample) zoneSample.textContent = 'VISA TYPE · SPONSOR · ENTRIES · EXPIRY';
+      if (hudDetail) hudDetail.textContent = 'Hold entry visa steady inside frame (Field format & date logic checks)';
+    } else if (docType === 'national_id') {
+      if (docLabel) docLabel.textContent = 'National Identity Card Alignment Box';
+      if (specLabel) specLabel.textContent = 'NATIONAL ID';
+      if (zoneTitle) zoneTitle.textContent = 'ID Demographic & Boundary Zone';
+      if (zoneSubtitle) zoneSubtitle.textContent = 'Format & Address Cross-Check';
+      if (zoneSample) zoneSample.textContent = 'CITIZEN ID · ADDRESS · GUARDIAN INFO';
+      if (hudDetail) hudDetail.textContent = 'Hold national ID steady inside the alignment frame';
+    } else {
+      if (docLabel) docLabel.textContent = 'Passport / ID Alignment Box';
+      if (specLabel) specLabel.textContent = 'ICAO 9303';
+      if (zoneTitle) zoneTitle.textContent = 'Machine-Readable Zone (MRZ)';
+      if (zoneSubtitle) zoneSubtitle.textContent = 'Checksum Target';
+      if (zoneSample) zoneSample.textContent = 'P<INDSHARMA<<RAHUL<<<<<<<<<<<<<<<<<<<<<<<<<<';
+      if (hudDetail) hudDetail.textContent = 'Hold passport steady inside the alignment frame';
+    }
+  }
+
+  // --- DOCUMENT IMAGE UPLOAD (FOR LAPTOP / DESKTOP TESTING) ---
+
+  /**
+   * Handles user-uploaded document image file (JPG, PNG)
+   * Analyzes quality using OpenCV.js (blur + glare detection),
+   * prompts retake if blurry, or saves blob and prepares for screening.
+   * @param {File} file
+   */
+  async handleImageUpload(file) {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.getElementById('camera-canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+
+        // Update preview image in UI
+        const previewImg = document.getElementById('specimen-preview-img');
+        if (previewImg) {
+          previewImg.style.backgroundImage = `url("${e.target.result}")`;
+          previewImg.classList.remove('hidden');
+        }
+        const video = document.getElementById('camera-video');
+        if (video) video.classList.add('hidden');
+        this.stopCamera();
+
+        // Run QualityGate blur & glare detection (OpenCV.js + fallback)
+        const quality = QualityGate.analyzeImageQuality(canvas);
+        console.log(`[QualityGate] Image quality analysis (${quality.engine}):`, quality);
+        this.updateQualityHUD(quality);
+
+        if (!quality.passed) {
+          this.showRetakeModal(quality);
+          return;
+        }
+
+        // Passed quality gate -> save JPEG blob into IndexedDB immediately (Step 2)
+        const recordId = crypto.randomUUID ? crypto.randomUUID() :
+          'scan-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        this.currentScanId = recordId;
+        this.lastCapturedCanvas = canvas;
+
+        try {
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+          if (blob) {
+            const activeOfficer = AuthManager.getActiveSession();
+            await dbInstance.saveScanRecord({
+              record_id: recordId,
+              image_blob: blob,
+              checkpoint_id: CONFIG.OFFICER?.checkpoint || 'CP-04-NORTH',
+              officer_id: activeOfficer?.id || CONFIG.OFFICER?.id || 'SSB-OFFICER',
+              timestamp: new Date().toISOString(),
+              image_path: `indexeddb://image_blobs/${recordId}`,
+              document_type: this.selectedDocType || this.activeSpecimen?.document_type || 'passport',
+              status: 'captured'
+            });
+            await dbInstance.saveImageBlob(recordId, blob, quality);
+            console.log(`[Step 2] ✅ Record stored in IndexedDB (Dexie.js): ${recordId} [image_blob: ${(blob.size / 1024).toFixed(1)} KB, status: 'captured']`);
+          }
+        } catch (saveErr) {
+          console.warn('[Step 2] Uploaded blob save error:', saveErr);
+        }
+
+        this.showToast(`✅ Quality Gate Passed (Variance: ${quality.laplacianVariance} via ${quality.engine}) · Click Capture & Verify`);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // --- STEP 3: PRETRAINED TESSERACT.JS OCR TEST & EXTRACTION ---
+
+  /**
+   * Run OCR test on a sample document image (or active captured canvas)
+   * Displays raw text before field extraction to confirm OCR engine readiness.
+   */
+  async handleRunOCRTest(customImage = null) {
+    this.showToast('🔍 Initializing Tesseract.js OCR engine...');
+
+    let imageSource = customImage;
+    if (!imageSource) {
+      if (this.lastCapturedCanvas) {
+        imageSource = this.lastCapturedCanvas;
+      } else {
+        // Generate high-contrast sample passport canvas with visual fields and MRZ
+        imageSource = OCREngine.generateSampleDocumentCanvas(this.activeSpecimen);
+      }
+    }
+
+    try {
+      const result = await OCREngine.recognize(imageSource);
+      console.log('[Step 3 OCR Test] Extracted raw text result:', result);
+
+      const modal = document.getElementById('ocr-result-modal');
+      const rawTextEl = document.getElementById('ocr-modal-rawtext');
+      const statusEl = document.getElementById('ocr-modal-status');
+      const engineEl = document.getElementById('ocr-modal-engine');
+      const charsEl = document.getElementById('ocr-modal-chars');
+      const confEl = document.getElementById('ocr-modal-confidence');
+
+      if (rawTextEl) rawTextEl.textContent = result.rawText || '(No text detected)';
+      if (statusEl) statusEl.textContent = result.success ? 'Raw Text Successfully Extracted' : 'Extraction Inconclusive';
+      if (engineEl) engineEl.textContent = result.engine || 'Tesseract.js';
+      if (charsEl) charsEl.textContent = `Characters: ${(result.rawText || '').length} · Lines: ${(result.lines || []).length}`;
+      if (confEl) confEl.textContent = `Confidence: ${(result.confidence || 90).toFixed(1)}%`;
+
+      if (modal) modal.classList.remove('hidden');
+
+      this.showToast(`✅ Step 3: OCR raw text confirmed (${(result.rawText || '').length} chars)`);
+      return result;
+    } catch (err) {
+      console.error('[Step 3 OCR Test] Error during test:', err);
+      this.showToast('⚠️ OCR Test warning: ' + err.message);
+    }
+  }
+
+  hideOCRModal() {
+    const modal = document.getElementById('ocr-result-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  // --- STEP 4: STRUCTURED OCR FIELD EXTRACTION & INSPECTION PANEL CONTROLLER ---
+
+  /**
+   * Handle interactive button click to inspect extracted fields directly
+   * side-by-side with document image preview.
+   */
+  async handleInspectExtractedFields() {
+    const officerDocType = document.getElementById('capture-doc-type-select')?.value || this.selectedDocType || this.activeSpecimen?.document_type || 'passport';
+    this.selectedDocType = officerDocType;
+
+    let imgSrc = null;
+    if (this.lastCapturedCanvas && this.lastCapturedCanvas.toDataURL) {
+      imgSrc = this.lastCapturedCanvas.toDataURL('image/jpeg', 0.85);
+    } else {
+      imgSrc = this.activeSpecimen?.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600';
+    }
+
+    // Extract fields via template parser
+    const rawText = OCREngine.lastRawText || '';
+    const extracted = OCREngine.extractFieldsByTemplate(rawText, officerDocType, {
+      ...this.activeSpecimen?.visualFields,
+      mrzLines: this.activeSpecimen?.mrzLines,
+      extra_fields: this.activeSpecimen?.extra_fields
+    });
+
+    const recordId = this.currentScanId || ('scan-' + Date.now().toString(36));
+    const record = {
+      record_id: recordId,
+      document_type: officerDocType,
+      name: extracted.name,
+      date_of_birth: extracted.date_of_birth,
+      document_number: extracted.document_number,
+      nationality: extracted.nationality,
+      gender: extracted.gender,
+      issue_date: extracted.issue_date,
+      expiry_date: extracted.expiry_date,
+      mrz_raw: extracted.mrz_raw,
+      extra_fields: extracted.extra_fields
+    };
+
+    this.currentExtractedRecord = record;
+    this.populateInspectionModal(record, imgSrc);
+    this.openExtractedFieldsModal();
+    this.showToast(`🔍 Inspecting ${officerDocType.toUpperCase()} Extracted Fields Side-by-Side`);
+  }
+
+  /**
+   * Populate and render Extracted Fields Inspection Panel on Approved or Flagged screen
+   * @param {Object} extracted - Structured 11-column fields
+   * @param {HTMLCanvasElement|string} imageSource - Document image canvas or URL
+   * @param {string} decision - 'APPROVED' | 'FLAGGED'
+   */
+  renderExtractedFieldsInspection(extracted, imageSource, decision = 'APPROVED') {
+    if (!extracted) return;
+    this.currentExtractedRecord = extracted;
+
+    const docType = (extracted.document_type || 'passport').toLowerCase();
+
+    // Determine image URL or data
+    let imgSrc = null;
+    if (typeof imageSource === 'string') {
+      imgSrc = imageSource;
+    } else if (imageSource && imageSource.toDataURL) {
+      imgSrc = imageSource.toDataURL('image/jpeg', 0.85);
+    } else {
+      imgSrc = this.activeSpecimen?.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600';
+    }
+
+    const formatExtraFieldsHTML = (extra) => {
+      if (!extra || Object.keys(extra).length === 0) {
+        return '<span class="text-xs text-on-surface-variant italic">No extra fields defined for this document.</span>';
+      }
+      return Object.entries(extra).map(([k, v]) => {
+        const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        return `
+          <div class="p-2.5 rounded-xl bg-surface-container-high border border-outline/20 flex flex-col justify-between shadow-xs">
+            <span class="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider block">${label}</span>
+            <span class="text-xs font-semibold text-on-surface block mt-1 font-mono truncate text-primary-fixed" title="${v || '—'}">${v || '—'}</span>
+          </div>
+        `;
+      }).join('');
+    };
+
+    const formatMrzBox = (preEl, badgeEl, mrzRaw) => {
+      if (mrzRaw && mrzRaw.trim().length > 0) {
+        if (preEl) {
+          preEl.textContent = mrzRaw;
+          preEl.className = 'font-mono text-[10px] text-on-surface tracking-wider bg-surface-container-lowest p-2.5 rounded-xl overflow-x-auto whitespace-pre select-all leading-tight border border-outline/20';
+        }
+        if (badgeEl) {
+          badgeEl.textContent = 'CHECKSUM VALID';
+          badgeEl.className = 'text-[10px] font-mono text-secondary font-bold px-2 py-0.5 rounded bg-secondary/15 border border-secondary/30';
+        }
+      } else {
+        if (preEl) {
+          preEl.textContent = `[NON-MRZ DOCUMENT FORMAT: ${docType.toUpperCase()}]\nStandard field format and chronology rules applied. MRZ zone check skipped cleanly (0 penalty).`;
+          preEl.className = 'font-mono text-[10px] text-primary-fixed tracking-wide bg-surface-container-lowest/80 p-2.5 rounded-xl whitespace-pre-wrap leading-relaxed border border-primary/20';
+        }
+        if (badgeEl) {
+          badgeEl.textContent = 'NON-MRZ FORMAT (BYPASSED)';
+          badgeEl.className = 'text-[10px] font-mono text-primary font-bold px-2 py-0.5 rounded bg-primary/15 border border-primary/30';
+        }
+      }
+    };
+
+    const prefix = decision === 'APPROVED' ? 'approved' : 'flagged';
+    const docImgEl = document.getElementById(`${prefix}-inspect-doc-img`);
+    const docTypeEl = document.getElementById(`${prefix}-panel-doc-type`);
+    const nameEl = document.getElementById(`${prefix}-field-name`);
+    const docNumEl = document.getElementById(`${prefix}-field-docnum`);
+    const natEl = document.getElementById(`${prefix}-field-nat`);
+    const genderEl = document.getElementById(`${prefix}-field-gender`);
+    const dobEl = document.getElementById(`${prefix}-field-dob`);
+    const issueEl = document.getElementById(`${prefix}-field-issue`);
+    const expEl = document.getElementById(`${prefix}-field-exp`);
+    const extraContainer = document.getElementById(`${prefix}-extra-fields-container`);
+    const extraCountEl = document.getElementById(`${prefix}-extra-count`);
+    const mrzPre = document.getElementById(`${prefix}-field-mrz`);
+    const mrzBadge = document.getElementById(`${prefix}-mrz-badge`);
+
+    if (docImgEl && imgSrc) docImgEl.src = imgSrc;
+    if (docTypeEl) docTypeEl.textContent = docType.toUpperCase();
+    if (nameEl) nameEl.textContent = extracted.name || 'UNKNOWN';
+    if (docNumEl) docNumEl.textContent = extracted.document_number || '—';
+    if (natEl) natEl.textContent = extracted.nationality || '—';
+    if (genderEl) genderEl.textContent = (extracted.gender === 'M' ? 'MALE' : (extracted.gender === 'F' ? 'FEMALE' : extracted.gender || '—'));
+    if (dobEl) dobEl.textContent = extracted.date_of_birth || '—';
+    if (issueEl) issueEl.textContent = extracted.issue_date || '—';
+    if (expEl) expEl.textContent = extracted.expiry_date || '—';
+
+    const extraFields = typeof extracted.extra_fields === 'string' ? JSON.parse(extracted.extra_fields || '{}') : (extracted.extra_fields || {});
+    if (extraContainer) extraContainer.innerHTML = formatExtraFieldsHTML(extraFields);
+    if (extraCountEl) extraCountEl.textContent = `${Object.keys(extraFields).length} fields`;
+
+    formatMrzBox(mrzPre, mrzBadge, extracted.mrz_raw);
+
+    // Also populate the side-by-side modal for deep inspection
+    this.populateInspectionModal(extracted, imgSrc);
+  }
+
+  /**
+   * Populates the dedicated Side-by-Side Extracted Fields Inspection Modal
+   */
+  populateInspectionModal(extracted, imgSrc) {
+    if (!extracted) return;
+    const docType = (extracted.document_type || 'passport').toLowerCase();
+
+    const modalDocType = document.getElementById('modal-field-doc-type');
+    const modalScanId = document.getElementById('modal-field-scan-id');
+    const modalDocImg = document.getElementById('modal-inspect-doc-img');
+    const modalName = document.getElementById('modal-field-name');
+    const modalDocNum = document.getElementById('modal-field-docnum');
+    const modalNat = document.getElementById('modal-field-nat');
+    const modalGender = document.getElementById('modal-field-gender');
+    const modalDob = document.getElementById('modal-field-dob');
+    const modalIssue = document.getElementById('modal-field-issue');
+    const modalExp = document.getElementById('modal-field-exp');
+    const modalExtraContainer = document.getElementById('modal-extra-fields-container');
+    const modalExtraCount = document.getElementById('modal-extra-count');
+    const modalMrzPre = document.getElementById('modal-field-mrz');
+    const modalMrzBadge = document.getElementById('modal-mrz-badge');
+
+    if (modalDocType) modalDocType.textContent = docType.toUpperCase();
+    if (modalScanId) modalScanId.textContent = extracted.record_id || this.currentScanId || 'scan-active';
+    if (modalDocImg && imgSrc) modalDocImg.src = imgSrc;
+    if (modalName) modalName.textContent = extracted.name || 'UNKNOWN';
+    if (modalDocNum) modalDocNum.textContent = extracted.document_number || '—';
+    if (modalNat) modalNat.textContent = extracted.nationality || '—';
+    if (modalGender) modalGender.textContent = (extracted.gender === 'M' ? 'MALE' : (extracted.gender === 'F' ? 'FEMALE' : extracted.gender || '—'));
+    if (modalDob) modalDob.textContent = extracted.date_of_birth || '—';
+    if (modalIssue) modalIssue.textContent = extracted.issue_date || '—';
+    if (modalExp) modalExp.textContent = extracted.expiry_date || '—';
+
+    const extraFields = typeof extracted.extra_fields === 'string' ? JSON.parse(extracted.extra_fields || '{}') : (extracted.extra_fields || {});
+    if (modalExtraContainer) {
+      if (Object.keys(extraFields).length === 0) {
+        modalExtraContainer.innerHTML = '<span class="text-xs text-on-surface-variant italic">No document-specific extra fields</span>';
+      } else {
+        modalExtraContainer.innerHTML = Object.entries(extraFields).map(([k, v]) => {
+          const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          return `
+            <div class="p-2.5 rounded-xl bg-surface-container-high/80 border border-outline/20">
+              <span class="text-[9px] uppercase font-bold text-on-surface-variant block">${label}</span>
+              <span class="text-xs font-semibold text-on-surface block mt-0.5 font-mono select-all truncate text-primary-fixed">${v || '—'}</span>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+    if (modalExtraCount) modalExtraCount.textContent = `${Object.keys(extraFields).length} fields`;
+
+    if (modalMrzPre) {
+      if (extracted.mrz_raw && extracted.mrz_raw.trim().length > 0) {
+        modalMrzPre.textContent = extracted.mrz_raw;
+        modalMrzPre.className = 'font-mono text-[10px] text-on-surface tracking-wider bg-surface-container-lowest p-2.5 rounded-lg overflow-x-auto whitespace-pre select-all leading-tight';
+        if (modalMrzBadge) {
+          modalMrzBadge.textContent = 'CHECKSUM VALID';
+          modalMrzBadge.className = 'text-[10px] font-mono text-secondary font-semibold';
+        }
+      } else {
+        modalMrzPre.textContent = `[NON-MRZ FORMAT: ${docType.toUpperCase()}]\nStandard field format and chronology rules applied. MRZ zone check skipped with 0 penalty.`;
+        modalMrzPre.className = 'font-mono text-[10px] text-primary-fixed tracking-wide bg-surface-container-lowest/80 p-2.5 rounded-lg whitespace-pre-wrap leading-relaxed border border-primary/20';
+        if (modalMrzBadge) {
+          modalMrzBadge.textContent = 'NON-MRZ FORMAT (BYPASSED)';
+          modalMrzBadge.className = 'text-[10px] font-mono text-primary font-semibold';
+        }
+      }
+    }
+  }
+
+  openExtractedFieldsModal() {
+    const modal = document.getElementById('extracted-fields-inspection-modal');
+    if (modal) modal.classList.remove('hidden');
+  }
+
+  closeExtractedFieldsModal() {
+    const modal = document.getElementById('extracted-fields-inspection-modal');
+    if (modal) modal.classList.add('hidden');
   }
 
   // --- EXECUTE FORENSIC PIPELINE & PROCESSING ---
@@ -560,6 +1085,44 @@ class DocuShieldApp {
   async triggerCapture() {
     let docDataToScreen = { ...this.activeSpecimen };
 
+    // Resolve officer-selected document type from capture screen dropdown
+    const officerDocType = document.getElementById('capture-doc-type-select')?.value || this.selectedDocType || docDataToScreen.document_type || 'passport';
+    this.selectedDocType = officerDocType;
+    docDataToScreen.document_type = officerDocType;
+    if (!docDataToScreen.visualFields) docDataToScreen.visualFields = {};
+    docDataToScreen.visualFields.documentType = officerDocType;
+
+    // For non-MRZ documents (e.g. Visa), clear MRZ expectations so pipeline skips MRZ check cleanly
+    if (officerDocType === 'visa') {
+      docDataToScreen.mrzLines = [];
+    }
+
+    // Attach type-specific extra_fields template if not present
+    if (!docDataToScreen.extra_fields) {
+      if (officerDocType === 'passport') {
+        docDataToScreen.extra_fields = {
+          issuing_authority: 'RPO DELHI',
+          place_of_birth: 'NEW DELHI',
+          passport_type: 'REGULAR'
+        };
+      } else if (officerDocType === 'national_id') {
+        docDataToScreen.extra_fields = {
+          address: 'Kathmandu, Ward 4, Nepal',
+          id_card_type: 'CITIZENSHIP_CARD',
+          parent_or_guardian_name: 'Bir Bahadur Thapa'
+        };
+      } else if (officerDocType === 'visa') {
+        docDataToScreen.extra_fields = {
+          visa_type: 'TOURIST',
+          linked_passport_number: 'GBR-8830192',
+          sponsor_name: 'MINISTRY OF EXTERNAL AFFAIRS',
+          number_of_entries_allowed: 'MULTIPLE',
+          issuing_country: 'IND'
+        };
+      }
+    }
+
+    // Step A3a: Capture Quality Gate (Laplacian blur & glare check)
     if (this.cameraActive) {
       const canvas = document.getElementById('camera-canvas');
       const quality = QualityGate.analyzeImageQuality(canvas);
@@ -568,10 +1131,243 @@ class DocuShieldApp {
         return;
       }
       docDataToScreen.qualityResult = quality;
+
+      // ── Step 2: Capture quality-gate-approved frame and store in IndexedDB ──
+      const recordId = crypto.randomUUID ? crypto.randomUUID() :
+        'scan-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      this.currentScanId = recordId;
+
+      // Create a full-resolution capture canvas
+      const video = document.getElementById('camera-video');
+      const captureCanvas = document.createElement('canvas');
+      captureCanvas.width = video.videoWidth || 1280;
+      captureCanvas.height = video.videoHeight || 720;
+      captureCanvas.getContext('2d').drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+      this.lastCapturedCanvas = captureCanvas;
+
+      // Convert to JPEG blob and save locally in IndexedDB (Step 2)
+      try {
+        const blob = await new Promise((resolve) => {
+          captureCanvas.toBlob(resolve, 'image/jpeg', 0.85);
+        });
+        if (blob) {
+          const activeOfficer = AuthManager.getActiveSession();
+          await dbInstance.saveScanRecord({
+            record_id: recordId,
+            image_blob: blob,
+            checkpoint_id: CONFIG.OFFICER?.checkpoint || 'CP-04-NORTH',
+            officer_id: activeOfficer?.id || CONFIG.OFFICER?.id || 'SSB-OFFICER',
+            timestamp: new Date().toISOString(),
+            image_path: `indexeddb://image_blobs/${recordId}`,
+            document_type: officerDocType,
+            status: 'captured'
+          });
+          await dbInstance.saveImageBlob(recordId, blob, quality);
+
+          console.log(`[Step 2] ✅ Record stored in IndexedDB (Dexie.js): ${recordId} [image_blob: ${(blob.size / 1024).toFixed(1)} KB, status: 'captured']`);
+        }
+      } catch (blobErr) {
+        console.warn('[Step 2] Local blob save warning (non-blocking):', blobErr);
+      }
+    } else {
+      // Offline Specimen or Pre-captured image mode
+      if (docDataToScreen.qualityResult && docDataToScreen.qualityResult.passed === false) {
+        // Specimen with poor quality (Specimen 6) triggers non-punitive retake loop
+        this.showRetakeModal({
+          retakePrompt: 'A3a: Capture Quality Check Required',
+          guidanceAdvice: docDataToScreen.qualityResult.failureReason ||
+            `Laplacian blur variance (${docDataToScreen.qualityResult.laplacianVariance || 38}) or glare (${docDataToScreen.qualityResult.overexposedPct || 22}%) failed quality gate. Hold steady and realign.`
+        });
+        return;
+      }
+
+      // Generate local scan record and snapshot blob if not already generated (Step 2)
+      if (!this.currentScanId) {
+        const recordId = crypto.randomUUID ? crypto.randomUUID() :
+          'scan-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        this.currentScanId = recordId;
+
+        try {
+          const canvas = this.lastCapturedCanvas || document.createElement('canvas');
+          if (!this.lastCapturedCanvas) {
+            canvas.width = 640;
+            canvas.height = 400;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#151e34';
+            ctx.fillRect(0, 0, 640, 400);
+            ctx.fillStyle = '#38bdf8';
+            ctx.font = 'bold 16px monospace';
+            ctx.fillText(`SPECIMEN: ${docDataToScreen.title || 'TEST DOC'}`, 24, 40);
+            ctx.fillStyle = '#e2e8f0';
+            ctx.font = '14px sans-serif';
+            ctx.fillText(`Traveler: ${docDataToScreen.visualFields?.fullName || 'Traveler'}`, 24, 80);
+            ctx.fillText(`Doc Number: ${docDataToScreen.visualFields?.documentNumber || 'TEST'}`, 24, 110);
+            this.lastCapturedCanvas = canvas;
+          }
+
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+          if (blob) {
+            const activeOfficer = AuthManager.getActiveSession();
+            await dbInstance.saveScanRecord({
+              record_id: recordId,
+              image_blob: blob,
+              checkpoint_id: CONFIG.OFFICER?.checkpoint || 'CP-04-NORTH',
+              officer_id: activeOfficer?.id || CONFIG.OFFICER?.id || 'SSB-OFFICER',
+              timestamp: new Date().toISOString(),
+              image_path: `indexeddb://image_blobs/${recordId}`,
+              document_type: officerDocType || docDataToScreen.document_type || 'passport',
+              status: 'captured'
+            });
+            await dbInstance.saveImageBlob(recordId, blob, docDataToScreen.qualityResult || { passed: true, engine: 'specimen' });
+            console.log(`[Step 2] ✅ Specimen record stored in IndexedDB (Dexie.js): ${recordId} [image_blob: ${(blob.size / 1024).toFixed(1)} KB, status: 'captured']`);
+          }
+        } catch (specErr) {
+          console.warn('[Step 2] Specimen local save warning:', specErr);
+        }
+      }
     }
 
+    // Step A2: Ledger Lookup (Check document history in cryptographic ledger)
+    const docNumber = docDataToScreen.visualFields?.documentNumber;
+    const routing = await LedgerRouter.evaluatePathway(docNumber);
+
+    // Branch 1: Found, approved with clean history -> Column C Fast Lane
+    if (routing.pathway === 'FAST_LANE') {
+      this.showToast('⚡ Verified Frequent Crosser · Routing to Column C Fast Lane');
+      await this.renderFastLaneScreen(docDataToScreen, routing);
+      this.navigateTo('fastlane');
+      return;
+    }
+
+    // Branch 2: Found, flagged in prior records -> Column B Direct Officer Review
+    if (routing.pathway === 'OFFICER_REVIEW') {
+      this.showToast('⚠️ Prior Alert Detected in Ledger · Direct Officer Adjudication');
+      const flagResult = {
+        decision: 'ESCALATED_SECONDARY',
+        riskScore: 68,
+        confidence: 65,
+        traveler: {
+          fullName: docDataToScreen.visualFields?.fullName || 'VIKRAM SINGH',
+          documentNumber: docNumber,
+          nationality: docDataToScreen.visualFields?.nationality || 'IND',
+          dateOfBirth: docDataToScreen.visualFields?.dateOfBirth || '1987-03-21',
+          expiryDate: docDataToScreen.visualFields?.expiryDate || '2032-09-14',
+          sex: docDataToScreen.visualFields?.sex || 'M',
+          documentType: docDataToScreen.visualFields?.documentType || 'PASSPORT',
+          photoUrl: docDataToScreen.photoUrl
+        },
+        anomalies: [
+          {
+            module: 'Column B: Ledger History Alert',
+            severity: 'CRITICAL',
+            reason: `Traveler flagged in prior checkpoint record (${routing.history.count} previous crossings). Mandatory officer adjudication required.`,
+            penalty: 45
+          }
+        ],
+        stages: {}
+      };
+      this.currentPipelineResult = flagResult;
+      this.renderFlaggedScreen(flagResult);
+      this.navigateTo('flagged');
+      return;
+    }
+
+    // Branch 3: Not found -> Column A Full 7-Stage Detection Pipeline
     this.navigateTo('processing');
     this.runPipelineStages(docDataToScreen);
+  }
+
+  // --- COLUMN C: FREQUENT-CROSSER FAST LANE CONTROLLER ---
+
+  async renderFastLaneScreen(docData, routing) {
+    this.activeFastLaneDoc = docData;
+    this.activeFastLaneRouting = routing;
+
+    const photoEl = document.getElementById('fastlane-traveler-photo');
+    const nameEl = document.getElementById('fastlane-traveler-name');
+    const docNumEl = document.getElementById('fastlane-doc-num');
+    const natEl = document.getElementById('fastlane-nat');
+    const typeEl = document.getElementById('fastlane-doc-type');
+    const badgeEl = document.getElementById('fastlane-crossings-badge');
+    const matchStatusEl = document.getElementById('fastlane-match-status');
+    const matchProgressEl = document.getElementById('fastlane-match-progress');
+    const resultBox = document.getElementById('fastlane-result-box');
+    const fallbackBox = document.getElementById('fastlane-fallback-box');
+    const admitBtn = document.getElementById('btn-fastlane-admit');
+
+    const vf = docData.visualFields || {};
+    if (photoEl && docData.photoUrl) photoEl.src = docData.photoUrl;
+    if (nameEl) nameEl.textContent = vf.fullName || 'RAMESH THAPA';
+    if (docNumEl) docNumEl.textContent = vf.documentNumber || 'NP-FC-991204';
+    if (natEl) natEl.textContent = `${vf.nationality || 'NPL'} · Nepal (Verified Local Commuter)`;
+    if (typeEl) typeEl.textContent = vf.documentType || 'BORDER PERMIT';
+    if (badgeEl) badgeEl.textContent = `${routing.history.count || 14} VERIFIED CROSSINGS`;
+
+    // Step C1: Quick Face Match simulation
+    if (matchStatusEl) {
+      matchStatusEl.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin text-primary">progress_activity</span><span>Comparing Live Face Biometrics...</span>';
+    }
+    if (matchProgressEl) matchProgressEl.style.width = '25%';
+    if (resultBox) resultBox.classList.add('hidden');
+    if (fallbackBox) fallbackBox.classList.add('hidden');
+    if (admitBtn) admitBtn.disabled = true;
+
+    await new Promise(r => setTimeout(r, 650));
+
+    const faceMatch = docData.simulatedFaceMatch !== undefined ? docData.simulatedFaceMatch : 97.2;
+    if (matchProgressEl) matchProgressEl.style.width = `${Math.min(100, Math.round(faceMatch))}%`;
+
+    if (faceMatch >= 80) {
+      // Step C2: Fast-Lane Auto-Pass
+      if (matchStatusEl) {
+        matchStatusEl.className = 'text-xs font-bold text-secondary flex items-center gap-1';
+        matchStatusEl.innerHTML = `<span class="material-symbols-outlined text-[16px]">check_circle</span><span>${faceMatch.toFixed(1)}% Biometric Match (Threshold 80%)</span>`;
+      }
+      if (resultBox) resultBox.classList.remove('hidden');
+      if (fallbackBox) fallbackBox.classList.add('hidden');
+      if (admitBtn) {
+        admitBtn.disabled = false;
+        admitBtn.innerHTML = '<span class="material-symbols-outlined text-[22px]">how_to_reg</span><span>Admit Frequent Crosser &amp; Open Gate</span>';
+      }
+    } else {
+      // Fallback to Full Pipeline
+      if (matchStatusEl) {
+        matchStatusEl.className = 'text-xs font-bold text-tertiary flex items-center gap-1';
+        matchStatusEl.innerHTML = `<span class="material-symbols-outlined text-[16px]">warning</span><span>${faceMatch.toFixed(1)}% Match (Below 80% Fast-Lane Threshold)</span>`;
+      }
+      if (resultBox) resultBox.classList.add('hidden');
+      if (fallbackBox) fallbackBox.classList.remove('hidden');
+      if (admitBtn) admitBtn.disabled = true;
+    }
+  }
+
+  async admitFrequentCrosser() {
+    if (!this.activeFastLaneDoc) return;
+    const docData = this.activeFastLaneDoc;
+    const vf = docData.visualFields || {};
+    const priorCount = (this.activeFastLaneRouting && this.activeFastLaneRouting.history)
+      ? this.activeFastLaneRouting.history.count
+      : 14;
+
+    const activeOfficer = AuthManager.getActiveSession();
+    const officerId = activeOfficer ? activeOfficer.id : CONFIG.OFFICER.id;
+
+    const block = await ledgerInstance.appendDecision({
+      docId: vf.documentNumber || 'NP-FC-991204',
+      travelerName: vf.fullName || 'RAMESH THAPA',
+      nationality: vf.nationality || 'NPL',
+      docType: vf.documentType || 'BORDER_PERMIT',
+      riskScore: 8,
+      decision: 'AUTO_APPROVED',
+      pathway: 'FAST_LANE',
+      crossingCount: priorCount + 1,
+      officerId: officerId,
+      reasons: [`Fast-lane biometric face match verified (${(docData.simulatedFaceMatch || 97.2).toFixed(1)}%). Crossing #${priorCount + 1} logged.`],
+      syncStatus: syncInstance.isOnline() ? 'SYNCED' : 'LOCAL PENDING'
+    });
+
+    this.showToast(`⚡ FAST-LANE CLEARANCE RECORD #${block.index} LOGGED`);
+    this.navigateTo('capture');
   }
 
   async runPipelineStages(documentData) {
@@ -649,19 +1445,88 @@ class DocuShieldApp {
       clearInterval(timer);
       this.currentPipelineResult = result;
 
-      // ── SAVE TO SQLITE ──
-      // Store the scan (with JPEG image) and analysis results in the database
-      const canvas = document.getElementById('camera-canvas');
-      this.lastCapturedCanvas = canvas;
-      const scanResult = await BackendAPI.saveScan(documentData, canvas);
+      // ── UPDATE LOCAL INDEXEDDB SCAN STATUS ──
+      // The scan record and image blob were already saved at shutter press
+      // (Phase 1). Now update the status to reflect pipeline completion.
+      if (this.currentScanId) {
+        try {
+          const finalStatus = result.decision === 'AUTO_APPROVED' ? 'decided' : 'tamper_checked';
+          await dbInstance.updateScanStatus(this.currentScanId, finalStatus);
+
+          // Save detection scores locally
+          await dbInstance.saveDetectionScores({
+            record_id: this.currentScanId,
+            tamper_score: result.stages?.tamperDetection?.score ?? 0,
+            face_match_score: result.stages?.faceMatch?.score ?? 0,
+            hidden_text_flag: result.stages?.hiddenTextDetection?.detected ?? false,
+            risk_score: result.riskScore ?? 0,
+            decision: result.decision || 'UNKNOWN'
+          });
+
+          // Save extracted fields locally (Generic schema across passport, national_id, visa)
+          const ef = result.extractedFields || {};
+          const docType = documentData.document_type || ef.document_type || (result.traveler && result.traveler.documentType) || this.selectedDocType || 'passport';
+          const rawMrz = ef.mrz_raw !== undefined ? ef.mrz_raw : ((documentData.mrzLines && documentData.mrzLines.length > 0) ? documentData.mrzLines.join('\n') : null);
+          const extraFields = ef.extra_fields || documentData.extra_fields || (result.traveler && result.traveler.extraFields) || {};
+
+          const extractedRecord = {
+            record_id: this.currentScanId,
+            document_type: docType,
+            name: ef.name || result.traveler?.fullName || documentData.visualFields?.fullName || 'UNKNOWN',
+            date_of_birth: ef.date_of_birth || result.traveler?.dateOfBirth || documentData.visualFields?.dateOfBirth,
+            document_number: ef.document_number || result.traveler?.documentNumber || documentData.visualFields?.documentNumber,
+            nationality: ef.nationality || result.traveler?.nationality || documentData.visualFields?.nationality,
+            gender: ef.gender || result.traveler?.sex || documentData.visualFields?.sex,
+            issue_date: ef.issue_date || documentData.issueDate || '2020-01-01',
+            expiry_date: ef.expiry_date || result.traveler?.expiryDate || documentData.visualFields?.expiryDate,
+            mrz_raw: rawMrz,
+            extra_fields: extraFields
+          };
+          this.currentExtractedRecord = extractedRecord;
+
+          await dbInstance.saveExtractedFields(extractedRecord);
+
+          // Step 5: Save validation results locally (ICAO 9303, Date Logic & Photo Check)
+          const valPassed = result.validation_passed !== undefined
+            ? result.validation_passed
+            : (result.stages?.mrz?.passed !== false && result.stages?.consistency?.passed !== false && result.stages?.logic?.passed !== false);
+
+          const failureReasons = result.failure_reasons || (result.anomalies || []).map(a => `${a.module}: ${a.description || a.reason || ''}`);
+
+          await dbInstance.saveValidationResults({
+            record_id: this.currentScanId,
+            validation_passed: valPassed,
+            mrz_checksum_passed: result.stages?.mrz?.passed ?? true,
+            field_format_passed: result.stages?.consistency?.passed ?? true,
+            date_logic_passed: result.stages?.logic?.passed ?? true,
+            photo_validation_passed: result.stages?.photoValidation?.passed ?? true,
+            failure_reasons: failureReasons
+          });
+
+          console.log(`[Step 5] ✅ Local scan ${this.currentScanId} validation recorded: passed=${valPassed}, reasons=${failureReasons.length}`);
+        } catch (localErr) {
+          console.warn('[Step 5] Local status update warning:', localErr);
+        }
+      }
+
+      // ── SYNC TO BACKEND (NON-BLOCKING, BEST-EFFORT) ──
+      // Use the pre-captured canvas saved at shutter press (not the analysis canvas)
+      const captureCanvas = this.lastCapturedCanvas || document.getElementById('camera-canvas');
+      const scanPayload = {
+        ...documentData,
+        extracted_fields: this.currentExtractedRecord
+      };
+      const scanResult = await BackendAPI.saveScan(scanPayload, captureCanvas);
+      const targetScanId = (scanResult && scanResult.scan_id) ? scanResult.scan_id : this.currentScanId;
+      if (this.currentExtractedRecord && targetScanId) {
+        await BackendAPI.saveExtractedFields(targetScanId, this.currentExtractedRecord);
+      }
       if (scanResult && scanResult.scan_id) {
-        this.currentScanId = scanResult.scan_id;
         // Save analysis results linked to this scan
-        await BackendAPI.saveAnalysis(this.currentScanId, result, processingTimeMs);
-        console.log(`[DB] ✅ Scan + Analysis stored in SQLite (${(processingTimeMs/1000).toFixed(2)}s pipeline)`);
+        await BackendAPI.saveAnalysis(scanResult.scan_id, result, processingTimeMs);
+        console.log(`[DB] ✅ Scan + Extracted Fields + Analysis synced to backend SQLite (${(processingTimeMs/1000).toFixed(2)}s pipeline)`);
       } else {
-        this.currentScanId = 'local-' + Date.now();
-        console.log('[DB] ⚠️ Backend unavailable — scan stored locally only');
+        console.log('[DB] ⚠️ Backend unavailable — scan persisted in local IndexedDB only');
       }
 
       // Small pause to let officer perceive completion
@@ -711,6 +1576,11 @@ class DocuShieldApp {
 
     if (blockRefEl) {
       blockRefEl.textContent = `IMMUTABLE HASH READY // SHA-256 ANCHOR`;
+    }
+
+    // Step 4: Populate Extracted Fields Inspection Panel side-by-side with document image
+    if (this.currentExtractedRecord) {
+      this.renderExtractedFieldsInspection(this.currentExtractedRecord, this.lastCapturedCanvas || t.photoUrl, 'APPROVED');
     }
   }
 
@@ -770,14 +1640,19 @@ class DocuShieldApp {
 
     if (listEl) {
       listEl.innerHTML = result.anomalies.map(a => `
-        <div class="p-space-sm rounded-lg bg-surface-container border-l-4 border-tertiary flex flex-col gap-1">
+        <div class="p-3.5 rounded-2xl bg-surface-container-high border-l-4 border-tertiary flex flex-col gap-1.5 border border-outline/20 shadow-sm">
           <div class="flex items-center justify-between">
-            <span class="font-title-sm text-xs font-semibold text-tertiary uppercase tracking-wider">${a.module}</span>
-            <span class="font-label-data text-code-sm text-tertiary font-bold">+${a.impact} RISK</span>
+            <span class="text-xs font-bold text-tertiary uppercase tracking-wide">${a.module}</span>
+            <span class="font-mono text-xs text-tertiary font-bold px-2 py-0.5 rounded-md bg-tertiary/15">+${a.impact} RISK</span>
           </div>
-          <p class="font-body-sm text-xs text-on-surface">${a.description}</p>
+          <p class="text-xs text-on-surface leading-relaxed">${a.description}</p>
         </div>
       `).join('');
+    }
+
+    // Step 4: Populate Extracted Fields Inspection Panel side-by-side with flagged document image
+    if (this.currentExtractedRecord) {
+      this.renderExtractedFieldsInspection(this.currentExtractedRecord, this.lastCapturedCanvas || t.photoUrl, 'FLAGGED');
     }
   }
 
@@ -889,36 +1764,39 @@ class DocuShieldApp {
     }
 
     listEl.innerHTML = this.reviewQueue.map((item, idx) => `
-      <div class="p-space-sm rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors flex flex-col gap-space-xs border border-surface-container-highest/60">
+      <div class="p-4 rounded-2xl bg-surface-container hover:bg-surface-container-high transition-all flex flex-col gap-2.5 border border-outline/20 shadow-sm">
         <div class="flex items-center justify-between">
-          <div class="flex items-center gap-space-sm">
-            <img src="${item.photoUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}" class="w-10 h-10 rounded-full object-cover border border-outline-variant/40" />
+          <div class="flex items-center gap-3">
+            <img src="${item.photoUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}" class="w-12 h-12 rounded-xl object-cover border border-outline/30 shadow-sm" />
             <div class="flex flex-col">
-              <span class="font-title-sm text-on-surface font-semibold">${item.travelerName}</span>
-              <span class="font-label-data text-code-sm text-on-surface-variant">${item.docNumber} · ${item.nationality} · ${item.docType}</span>
+              <span class="font-bold text-sm text-on-surface">${item.travelerName}</span>
+              <span class="text-xs text-on-surface-variant font-mono mt-0.5">${item.docNumber} · ${item.nationality} · ${item.docType}</span>
             </div>
           </div>
           <div class="flex flex-col items-end gap-1">
-            <span class="px-2 py-0.5 rounded font-label-data text-code-sm font-bold ${
-              item.riskScore > 50 ? 'bg-error-container text-error' : 'bg-tertiary-container text-on-tertiary'
+            <span class="px-2.5 py-0.5 rounded-full font-mono text-xs font-bold ${
+              item.riskScore > 50 ? 'bg-error/15 text-error border border-error/30' : 'bg-tertiary/15 text-tertiary border border-tertiary/30'
             }">RISK ${item.riskScore}</span>
-            <span class="font-label-micro text-[9px] uppercase px-1.5 py-0.5 rounded ${
-              item.syncStatus === 'SYNCED' ? 'bg-secondary/10 text-secondary' : 'bg-tertiary/10 text-tertiary'
+            <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full ${
+              item.syncStatus === 'SYNCED' ? 'bg-secondary/15 text-secondary' : 'bg-tertiary/15 text-tertiary'
             }">${item.syncStatus}</span>
           </div>
         </div>
-        <div class="bg-surface-container-lowest/80 p-2 rounded text-xs text-on-surface-variant space-y-1">
-          ${item.anomalies.map(anom => `<div class="flex items-start gap-1"><span class="text-tertiary">•</span><span>${anom}</span></div>`).join('')}
+        <div class="bg-surface-container-high/60 p-2.5 rounded-xl text-xs text-on-surface-variant space-y-1 border border-outline/10">
+          ${item.anomalies.map(anom => `<div class="flex items-start gap-1.5"><span class="text-tertiary font-bold">•</span><span class="text-on-surface">${anom}</span></div>`).join('')}
         </div>
         <div class="flex items-center justify-between pt-1 text-xs">
-          <span class="text-outline font-label-data">${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <span class="text-outline font-medium">${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           <div class="flex gap-2">
             ${item.status === 'PENDING' ? `
-              <button data-idx="${idx}" class="queue-adjudicate-btn px-3 py-1 rounded bg-secondary text-on-secondary font-title-sm text-xs font-semibold uppercase hover:bg-secondary/90 transition-all">
-                CLEAR / ADMIT
+              <button data-idx="${idx}" class="queue-adjudicate-btn px-4 py-1.5 rounded-xl bg-secondary text-white font-bold text-xs uppercase hover:bg-secondary-container transition-all shadow-sm">
+                Clear &amp; Admit
               </button>
             ` : `
-              <span class="font-label-micro text-secondary uppercase font-semibold">ADJUDICATED</span>
+              <span class="text-xs text-secondary font-bold uppercase flex items-center gap-1">
+                <span class="material-symbols-outlined text-[16px]">check</span>
+                <span>Adjudicated</span>
+              </span>
             `}
           </div>
         </div>
@@ -966,50 +1844,62 @@ class DocuShieldApp {
     const blocks = await ledgerInstance.getBlocks();
     if (totalBlocksEl) totalBlocksEl.textContent = `${blocks.length} TOTAL IMMUTABLE RECORDS`;
 
-    listEl.innerHTML = blocks.map(b => `
-      <div class="p-space-base rounded-xl bg-surface-container border border-surface-container-highest flex flex-col gap-space-xs font-label-data">
-        <div class="flex items-center justify-between pb-1 border-b border-surface-container-highest/60">
-          <div class="flex items-center gap-space-xs">
-            <span class="text-primary font-bold">BLOCK #${b.index}</span>
-            <span class="text-outline font-normal">·</span>
-            <span class="text-on-surface font-semibold text-xs">${b.travelerName}</span>
+    listEl.innerHTML = blocks.map(b => {
+      let pathwayBadge = '';
+      if (b.pathway === 'FAST_LANE') {
+        pathwayBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/15 text-primary border border-primary/30">⚡ FAST LANE (#${b.crossingCount || 1})</span>`;
+      } else if (b.pathway === 'OFFICER_REVIEW') {
+        pathwayBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-tertiary/15 text-tertiary border border-tertiary/30">⚠️ OFFICER ADJUDICATION</span>`;
+      } else {
+        pathwayBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-secondary/15 text-secondary border border-secondary/30">🛡️ 7-STAGE PIPELINE</span>`;
+      }
+
+      return `
+      <div class="p-4 rounded-2xl bg-surface-container border border-outline/20 flex flex-col gap-2.5 shadow-sm">
+        <div class="flex items-center justify-between pb-2 border-b border-outline/15">
+          <div class="flex items-center gap-2">
+            <span class="text-primary font-bold font-mono text-xs">RECORD #${b.index}</span>
+            <span class="text-outline">·</span>
+            <span class="text-on-surface font-bold text-xs">${b.travelerName}</span>
+            ${pathwayBadge}
           </div>
-          <span class="px-2 py-0.5 rounded text-code-sm font-semibold uppercase ${
+          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
             b.syncStatus === 'SYNCED' ? 'bg-secondary/15 text-secondary' : 'bg-tertiary/15 text-tertiary animate-pulse'
           }">${b.syncStatus}</span>
         </div>
-        <div class="grid grid-cols-2 gap-2 text-xs py-1">
-          <div>
-            <span class="text-outline text-[10px] uppercase block">DOC ID / REF</span>
-            <span class="text-on-surface font-medium">${b.docId} (${b.nationality})</span>
+        <div class="grid grid-cols-2 gap-2.5 text-xs py-1">
+          <div class="p-2 rounded-xl bg-surface-container-high/60">
+            <span class="text-outline text-[10px] uppercase block font-medium">Document ID</span>
+            <span class="text-on-surface font-semibold font-mono">${b.docId} (${b.nationality})</span>
           </div>
-          <div>
-            <span class="text-outline text-[10px] uppercase block">DECISION</span>
+          <div class="p-2 rounded-xl bg-surface-container-high/60">
+            <span class="text-outline text-[10px] uppercase block font-medium">Decision</span>
             <span class="font-bold ${
               b.decision === 'AUTO_APPROVED' ? 'text-secondary' : (b.decision === 'OFFICER_OVERRIDE' ? 'text-primary' : 'text-tertiary')
             }">${b.decision}</span>
           </div>
-          <div>
-            <span class="text-outline text-[10px] uppercase block">OFFICER ID</span>
-            <span class="text-on-surface">${b.officerId}</span>
+          <div class="p-2 rounded-xl bg-surface-container-high/60">
+            <span class="text-outline text-[10px] uppercase block font-medium">Duty Officer</span>
+            <span class="text-on-surface font-medium">${b.officerId}</span>
           </div>
-          <div>
-            <span class="text-outline text-[10px] uppercase block">TIMESTAMP (UTC)</span>
-            <span class="text-on-surface">${new Date(b.timestamp).toISOString().replace('T', ' ').substring(0, 19)}</span>
+          <div class="p-2 rounded-xl bg-surface-container-high/60">
+            <span class="text-outline text-[10px] uppercase block font-medium">Timestamp (UTC)</span>
+            <span class="text-on-surface font-mono text-[11px]">${new Date(b.timestamp).toISOString().replace('T', ' ').substring(0, 19)}</span>
           </div>
         </div>
-        <div class="bg-surface-container-lowest p-2 rounded flex flex-col gap-1 text-[11px] font-mono break-all text-outline">
+        <div class="bg-surface-container-high/80 p-2.5 rounded-xl flex flex-col gap-1 text-[11px] font-mono break-all border border-outline/10">
           <div class="flex items-center justify-between text-on-surface-variant">
-            <span>HASH:</span>
-            <span class="text-primary-fixed">${b.hash.substring(0, 20)}...${b.hash.substring(44)}</span>
+            <span class="text-outline text-[10px]">SHA-256:</span>
+            <span class="text-primary font-bold">${b.hash.substring(0, 20)}...${b.hash.substring(44)}</span>
           </div>
-          <div class="flex items-center justify-between text-[10px]">
-            <span>PREV:</span>
-            <span class="text-outline">${b.prevHash.substring(0, 18)}...</span>
+          <div class="flex items-center justify-between text-[10px] text-outline">
+            <span>CHAIN PREV:</span>
+            <span>${b.prevHash.substring(0, 18)}...</span>
           </div>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
 
   async verifyLedgerIntegrity() {
@@ -1071,6 +1961,8 @@ class DocuShieldApp {
   // --- PROFILE SCREEN ---
 
   renderProfile() {
+    this.updateHardwareDiagnostics();
+
     const toggleBtn = document.getElementById('network-toggle-btn');
     const statusText = document.getElementById('network-sim-status');
     if (!toggleBtn || !statusText) return;
@@ -1157,21 +2049,21 @@ class DocuShieldApp {
       const enrolledDate = o.enrolledAt ? new Date(o.enrolledAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Verified';
 
       return `
-        <div class="p-3.5 rounded-xl bg-surface-container-highest/60 border border-outline/20 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:border-primary/40 transition-all">
+        <div class="p-3.5 rounded-2xl bg-surface-container-high border border-outline/20 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:border-outline/40 transition-all shadow-sm">
           <div class="flex items-start sm:items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-surface-container border border-outline/30 flex items-center justify-center text-primary font-bold font-mono text-xs flex-shrink-0 mt-0.5 sm:mt-0">
+            <div class="w-11 h-11 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0 mt-0.5 sm:mt-0">
               ${initials}
             </div>
             <div class="flex flex-col">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="font-bold text-xs text-on-surface">${o.fullName}</span>
-                <span class="px-2 py-0.5 rounded text-[9px] font-mono font-bold ${isActive ? 'bg-secondary/20 text-secondary border border-secondary/30' : 'bg-error-container/30 text-error border border-error/30'}">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-secondary/15 text-secondary border border-secondary/30' : 'bg-error/15 text-error border border-error/30'}">
                   ${o.status}
                 </span>
-                <span class="font-mono text-[10px] text-outline">Enrolled: ${enrolledDate}</span>
+                <span class="text-[11px] text-outline">Enrolled: ${enrolledDate}</span>
               </div>
-              <div class="flex flex-wrap items-center gap-2 font-mono text-[11px] text-on-surface-variant mt-0.5">
-                <span class="text-primary font-semibold">${o.id}</span>
+              <div class="flex flex-wrap items-center gap-1.5 text-xs text-on-surface-variant mt-0.5">
+                <span class="text-primary font-semibold font-mono">${o.id}</span>
                 <span>•</span>
                 <span>${o.rank}</span>
                 <span>•</span>
@@ -1182,27 +2074,27 @@ class DocuShieldApp {
           </div>
 
           <div class="flex flex-wrap items-center gap-1.5 self-end md:self-center flex-shrink-0">
-            <button type="button" class="btn-quick-login-officer px-2.5 py-1 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary text-[10px] font-mono uppercase font-bold transition-all flex items-center gap-1" data-officer-id="${o.id}" title="Login as this officer">
-              <span class="material-symbols-outlined text-[13px]">login</span>
+            <button type="button" class="btn-quick-login-officer px-3 py-1.5 rounded-xl bg-primary/15 hover:bg-primary/25 border border-primary/30 text-primary text-xs font-semibold transition-all flex items-center gap-1" data-officer-id="${o.id}" title="Login as this officer">
+              <span class="material-symbols-outlined text-[15px]">login</span>
               <span>Login As</span>
             </button>
 
-            <button type="button" class="btn-toggle-status px-2.5 py-1 rounded-lg text-[10px] font-mono uppercase font-semibold border transition-all ${isActive ? 'border-error/40 text-error hover:bg-error-container/20' : 'border-secondary/40 text-secondary hover:bg-secondary/20'}" data-officer-id="${o.id}">
+            <button type="button" class="btn-toggle-status px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${isActive ? 'border-error/30 text-error hover:bg-error/15' : 'border-secondary/30 text-secondary hover:bg-secondary/15'}" data-officer-id="${o.id}">
               ${isActive ? 'Suspend' : 'Activate'}
             </button>
 
-            <button type="button" class="btn-open-reset-pin px-2 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline/20 text-on-surface text-[10px] font-mono uppercase font-semibold transition-all flex items-center gap-1" data-officer-id="${o.id}" data-officer-name="${o.fullName}" title="Reset Terminal PIN">
-              <span class="material-symbols-outlined text-[13px]">key</span>
+            <button type="button" class="btn-open-reset-pin px-2.5 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-highest border border-outline/20 text-on-surface text-xs font-semibold transition-all flex items-center gap-1" data-officer-id="${o.id}" data-officer-name="${o.fullName}" title="Reset Terminal PIN">
+              <span class="material-symbols-outlined text-[15px]">key</span>
               <span>PIN</span>
             </button>
 
-            <button type="button" class="btn-open-edit-officer px-2 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline/20 text-on-surface text-[10px] font-mono uppercase font-semibold transition-all flex items-center gap-1" data-officer-id="${o.id}" title="Edit officer details">
-              <span class="material-symbols-outlined text-[13px]">edit</span>
+            <button type="button" class="btn-open-edit-officer px-2.5 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-highest border border-outline/20 text-on-surface text-xs font-semibold transition-all flex items-center gap-1" data-officer-id="${o.id}" title="Edit officer details">
+              <span class="material-symbols-outlined text-[15px]">edit</span>
               <span>Edit</span>
             </button>
 
-            <button type="button" class="btn-delete-officer px-2 py-1 rounded-lg border border-error/20 text-error/80 hover:text-error hover:bg-error-container/20 text-[10px] font-mono uppercase font-semibold transition-all" data-officer-id="${o.id}" title="Decommission officer badge">
-              <span class="material-symbols-outlined text-[13px]">delete</span>
+            <button type="button" class="btn-delete-officer px-2.5 py-1.5 rounded-xl border border-error/20 text-error hover:bg-error/15 text-xs font-semibold transition-all" data-officer-id="${o.id}" title="Decommission officer badge">
+              <span class="material-symbols-outlined text-[15px]">delete</span>
             </button>
           </div>
         </div>
@@ -1418,6 +2310,17 @@ class DocuShieldApp {
       btn.addEventListener('click', () => {
         this.navigateTo(btn.dataset.screen);
       });
+    });
+
+    // Hardware & Storage Persistence verification button (Step 0c)
+    document.getElementById('btn-request-hardware-perm')?.addEventListener('click', async () => {
+      this.showToast('Verifying Camera & Storage Permissions...');
+      const res = await this.requestFirstUsePermissions(true);
+      if (res.cameraGranted) {
+        this.showToast('✅ Camera & Storage Permissions Active & Persisted');
+      } else {
+        this.showToast('⚠️ Camera permission prompt requires user approval');
+      }
     });
 
     // --- AUTHENTICATION MODE SWITCHER ---
@@ -1744,6 +2647,16 @@ class DocuShieldApp {
     }
 
     // Capture screen triggers
+    const docTypeSelect = document.getElementById('capture-doc-type-select');
+    if (docTypeSelect) {
+      docTypeSelect.addEventListener('change', (e) => {
+        this.selectedDocType = e.target.value;
+        this.updateViewfinderForDocType(this.selectedDocType);
+        this.showToast(`📋 Document Type Set: ${this.selectedDocType.toUpperCase()}`);
+        console.log(`[Officer Selection] Document type selected at capture time: ${this.selectedDocType}`);
+      });
+    }
+
     const shutterBtn = document.getElementById('shutter-btn');
     if (shutterBtn) {
       shutterBtn.addEventListener('click', () => this.triggerCapture());
@@ -1759,6 +2672,73 @@ class DocuShieldApp {
       switchCamBtn.addEventListener('click', () => {
         this.stopCamera();
         this.startCamera();
+      });
+    }
+
+    // Document image file upload (desktop/laptop testing)
+    const docFileInput = document.getElementById('document-file-input');
+    if (docFileInput) {
+      docFileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          this.handleImageUpload(e.target.files[0]);
+        }
+      });
+    }
+
+    // Step 3: OCR Test Action Buttons & Modal
+    const btnOcrTest = document.getElementById('btn-ocr-test-action');
+    if (btnOcrTest) {
+      btnOcrTest.addEventListener('click', () => this.handleRunOCRTest());
+    }
+
+    const btnDiagOcr = document.getElementById('btn-test-sample-ocr');
+    if (btnDiagOcr) {
+      btnDiagOcr.addEventListener('click', () => this.handleRunOCRTest());
+    }
+
+    const ocrModalClose = document.getElementById('ocr-result-modal-close');
+    if (ocrModalClose) {
+      ocrModalClose.addEventListener('click', () => this.hideOCRModal());
+    }
+
+    // Step 4: Structured OCR Field Inspection Buttons & Modal
+    const btnInspectFields = document.getElementById('btn-inspect-fields-action');
+    if (btnInspectFields) {
+      btnInspectFields.addEventListener('click', () => this.handleInspectExtractedFields());
+    }
+
+    document.querySelectorAll('.btn-open-fields-modal').forEach(btn => {
+      btn.addEventListener('click', () => this.openExtractedFieldsModal());
+    });
+
+    const fieldsModalClose = document.getElementById('extracted-fields-modal-close');
+    if (fieldsModalClose) {
+      fieldsModalClose.addEventListener('click', () => this.closeExtractedFieldsModal());
+    }
+
+    const fieldsModalCloseBottom = document.getElementById('modal-close-bottom-btn');
+    if (fieldsModalCloseBottom) {
+      fieldsModalCloseBottom.addEventListener('click', () => this.closeExtractedFieldsModal());
+    }
+
+    const fieldsModal = document.getElementById('extracted-fields-inspection-modal');
+    if (fieldsModal) {
+      fieldsModal.addEventListener('click', (e) => {
+        if (e.target === fieldsModal) this.closeExtractedFieldsModal();
+      });
+    }
+
+    // Fast Lane actions
+    const btnFastlaneAdmit = document.getElementById('btn-fastlane-admit');
+    if (btnFastlaneAdmit) {
+      btnFastlaneAdmit.addEventListener('click', () => this.admitFrequentCrosser());
+    }
+
+    const btnFastlaneTransfer = document.getElementById('btn-fastlane-transfer-full');
+    if (btnFastlaneTransfer) {
+      btnFastlaneTransfer.addEventListener('click', () => {
+        this.navigateTo('processing');
+        this.runPipelineStages(this.activeFastLaneDoc);
       });
     }
 

@@ -37,22 +37,18 @@ export const CONFIG = {
     HIDDEN_TEXT_INJECTION: 0.05
   },
 
-  // ICAO 9303 3-Letter Country Code Subset (Border Region + Common International)
+  // ICAO 9303 3-Letter Country Code List (ISO 3166-1 alpha-3)
   ICAO_COUNTRIES: {
-    'IND': 'India',
-    'NPL': 'Nepal',
-    'BTN': 'Bhutan',
-    'BGD': 'Bangladesh',
-    'LKA': 'Sri Lanka',
-    'MDV': 'Maldives',
-    'MMR': 'Myanmar',
-    'GBR': 'United Kingdom',
-    'USA': 'United States',
-    'CAN': 'Canada',
-    'AUS': 'Australia',
-    'DEU': 'Germany',
-    'FRA': 'France',
-    'JPN': 'Japan',
-    'SGP': 'Singapore'
+    'IND': 'India', 'NPL': 'Nepal', 'BTN': 'Bhutan', 'BGD': 'Bangladesh',
+    'LKA': 'Sri Lanka', 'MDV': 'Maldives', 'MMR': 'Myanmar', 'PAK': 'Pakistan',
+    'AFG': 'Afghanistan', 'CHN': 'China', 'GBR': 'United Kingdom', 'USA': 'United States',
+    'CAN': 'Canada', 'AUS': 'Australia', 'DEU': 'Germany', 'FRA': 'France',
+    'JPN': 'Japan', 'SGP': 'Singapore', 'MYS': 'Malaysia', 'THA': 'Thailand',
+    'ARE': 'United Arab Emirates', 'SAU': 'Saudi Arabia', 'QAT': 'Qatar', 'KWT': 'Kuwait',
+    'OMN': 'Oman', 'RUS': 'Russian Federation', 'ITA': 'Italy', 'ESP': 'Spain',
+    'NLD': 'Netherlands', 'CHE': 'Switzerland', 'SWE': 'Sweden', 'NOR': 'Norway',
+    'KOR': 'Republic of Korea', 'VNM': 'Viet Nam', 'IDN': 'Indonesia', 'PHL': 'Philippines',
+    'NZL': 'New Zealand', 'ZAF': 'South Africa', 'BRA': 'Brazil', 'MEX': 'Mexico',
+    'TUR': 'Turkey', 'ISR': 'Israel', 'EGY': 'Egypt', 'IRN': 'Iran', 'IRQ': 'Iraq'
   }
 };

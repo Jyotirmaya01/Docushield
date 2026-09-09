@@ -1,11 +1,11 @@
 /**
  * DocuShield Computer Vision Capture & Quality Gate
  * Implements:
- * 1. Laplacian Variance Blur Detection
- * 2. Grayscale Luminance Histogram Glare & Underexposure Analysis
+ * 1. OpenCV.js Laplacian Variance Blur Detection (cv.Laplacian + cv.meanStdDev)
+ * 2. Grayscale Luminance Histogram Glare & Underexposure Analysis (cv.calcHist / luminance)
  * 3. Document Framing & Corner Alignment Check
  *
- * Core Ethical Rule: Gating failures trigger a friendly retake prompt,
+ * Core Ethical Rule: Gating failures trigger a friendly non-punitive retake prompt,
  * NEVER rejecting the document itself.
  */
 
@@ -13,7 +13,130 @@ import { CONFIG } from '../config.js';
 
 export class QualityGate {
   /**
-   * Analyzes an ImageData or HTMLCanvasElement
+   * Check if OpenCV.js runtime is ready and compiled in window
+   * @returns {boolean}
+   */
+  static isOpenCVReady() {
+    return typeof window !== 'undefined' &&
+           typeof window.cv !== 'undefined' &&
+           typeof window.cv.Mat === 'function';
+  }
+
+  /**
+   * Computes Laplacian variance using OpenCV.js (cv.Laplacian + cv.meanStdDev)
+   * Kernel: 3x3 discrete Laplacian operator (ksize=1 -> aperture 3x3)
+   * @param {HTMLCanvasElement|ImageData} source
+   * @returns {number|null} Variance of Laplacian or null if cv not available
+   */
+  static computeLaplacianVarianceCV(source) {
+    if (!QualityGate.isOpenCVReady()) return null;
+
+    let src = null;
+    let gray = null;
+    let lap = null;
+    let mean = null;
+    let stddev = null;
+
+    try {
+      if (source instanceof HTMLCanvasElement) {
+        src = window.cv.imread(source);
+      } else if (source instanceof ImageData) {
+        src = window.cv.matFromImageData(source);
+      } else {
+        return null;
+      }
+
+      gray = new window.cv.Mat();
+      window.cv.cvtColor(src, gray, window.cv.COLOR_RGBA2GRAY, 0);
+
+      lap = new window.cv.Mat();
+      // cv.Laplacian with CV_64F to preserve signed derivatives and prevent overflow
+      window.cv.Laplacian(gray, lap, window.cv.CV_64F, 1, 1, 0, window.cv.BORDER_DEFAULT);
+
+      mean = new window.cv.Mat();
+      stddev = new window.cv.Mat();
+      window.cv.meanStdDev(lap, mean, stddev);
+
+      // Variance is square of standard deviation
+      const sigma = stddev.doubleAt(0, 0);
+      const variance = sigma * sigma;
+
+      return variance;
+    } catch (err) {
+      console.warn('[QualityGate] OpenCV.js blur calculation error, using fallback:', err);
+      return null;
+    } finally {
+      if (src) src.delete();
+      if (gray) gray.delete();
+      if (lap) lap.delete();
+      if (mean) mean.delete();
+      if (stddev) stddev.delete();
+    }
+  }
+
+  /**
+   * Computes glare and underexposure percentages via OpenCV.js histogram
+   * @param {HTMLCanvasElement|ImageData} source
+   * @returns {{overexposedPct: number, underexposedPct: number}|null}
+   */
+  static computeHistogramCV(source) {
+    if (!QualityGate.isOpenCVReady()) return null;
+
+    let src = null;
+    let gray = null;
+    let hist = null;
+    let matVec = null;
+    let mask = null;
+
+    try {
+      if (source instanceof HTMLCanvasElement) {
+        src = window.cv.imread(source);
+      } else if (source instanceof ImageData) {
+        src = window.cv.matFromImageData(source);
+      } else {
+        return null;
+      }
+
+      gray = new window.cv.Mat();
+      window.cv.cvtColor(src, gray, window.cv.COLOR_RGBA2GRAY, 0);
+
+      hist = new window.cv.Mat();
+      mask = new window.cv.Mat();
+      matVec = new window.cv.MatVector();
+      matVec.push_back(gray);
+
+      // cv.calcHist(images, channels, mask, hist, histSize, ranges)
+      window.cv.calcHist(matVec, [0], mask, hist, [256], [0, 256]);
+
+      const totalPixels = gray.rows * gray.cols;
+      let overexposedCount = 0;
+      let underexposedCount = 0;
+
+      for (let i = 0; i <= 32; i++) {
+        underexposedCount += hist.data32F[i];
+      }
+      for (let i = 246; i < 256; i++) {
+        overexposedCount += hist.data32F[i];
+      }
+
+      return {
+        overexposedPct: (overexposedCount / totalPixels) * 100,
+        underexposedPct: (underexposedCount / totalPixels) * 100
+      };
+    } catch (err) {
+      console.warn('[QualityGate] OpenCV.js histogram calculation error, using fallback:', err);
+      return null;
+    } finally {
+      if (src) src.delete();
+      if (gray) gray.delete();
+      if (hist) hist.delete();
+      if (mask) mask.delete();
+      if (matVec) matVec.delete();
+    }
+  }
+
+  /**
+   * Analyzes an ImageData or HTMLCanvasElement for blur, glare, and framing
    * @param {HTMLCanvasElement|ImageData} source 
    * @returns {Object} Quality gate diagnostic results
    */
@@ -31,60 +154,79 @@ export class QualityGate {
     const { width, height, data } = imageData;
     const totalPixels = width * height;
 
-    // 1. Build grayscale array and histogram
+    let engine = 'pure-js';
+    let laplacianVariance = null;
+    let overexposedPct = null;
+    let underexposedPct = null;
+
+    // ── 1. Try OpenCV.js WebAssembly Engine ──
+    const cvVariance = QualityGate.computeLaplacianVarianceCV(source);
+    const cvHist = QualityGate.computeHistogramCV(source);
+
+    if (cvVariance !== null && cvHist !== null) {
+      engine = 'opencv.js';
+      laplacianVariance = cvVariance;
+      overexposedPct = cvHist.overexposedPct;
+      underexposedPct = cvHist.underexposedPct;
+    }
+
+    // ── 2. Fallback: Fast Typed-Array Pure JS Processing ──
     const grayscale = new Uint8ClampedArray(totalPixels);
     const histogram = new Uint32Array(256);
-    let overexposedCount = 0;
-    let underexposedCount = 0;
+    let jsOverexposedCount = 0;
+    let jsUnderexposedCount = 0;
 
     for (let i = 0; i < totalPixels; i++) {
       const r = data[i * 4];
       const g = data[i * 4 + 1];
       const b = data[i * 4 + 2];
-      // Standard luminance formula
+      // Standard ITU-R BT.601 luminance formula
       const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
       grayscale[i] = lum;
       histogram[lum]++;
 
-      if (lum >= 246) overexposedCount++;
-      if (lum <= 32) underexposedCount++;
+      if (lum >= 246) jsOverexposedCount++;
+      if (lum <= 32) jsUnderexposedCount++;
     }
 
-    const overexposedPct = (overexposedCount / totalPixels) * 100;
-    const underexposedPct = (underexposedCount / totalPixels) * 100;
+    if (overexposedPct === null) {
+      overexposedPct = (jsOverexposedCount / totalPixels) * 100;
+      underexposedPct = (jsUnderexposedCount / totalPixels) * 100;
+    }
 
-    // 2. Laplacian Variance Blur Check
-    // Kernel: [0, 1, 0; 1, -4, 1; 0, 1, 0]
-    let lapSum = 0;
-    let lapSqSum = 0;
-    let sampleCount = 0;
+    if (laplacianVariance === null) {
+      // Discrete 3x3 Laplacian Kernel: [0, 1, 0; 1, -4, 1; 0, 1, 0]
+      let lapSum = 0;
+      let lapSqSum = 0;
+      let sampleCount = 0;
 
-    // Sample step for real-time mobile performance
-    const step = width > 600 ? 2 : 1;
+      // Sample step for real-time mobile/laptop performance
+      const step = width > 600 ? 2 : 1;
 
-    for (let y = 1; y < height - 1; y += step) {
-      const rowOffset = y * width;
-      const topOffset = (y - 1) * width;
-      const botOffset = (y + 1) * width;
+      for (let y = 1; y < height - 1; y += step) {
+        const rowOffset = y * width;
+        const topOffset = (y - 1) * width;
+        const botOffset = (y + 1) * width;
 
-      for (let x = 1; x < width - 1; x += step) {
-        const center = grayscale[rowOffset + x];
-        const top = grayscale[topOffset + x];
-        const bot = grayscale[botOffset + x];
-        const left = grayscale[rowOffset + x - 1];
-        const right = grayscale[rowOffset + x + 1];
+        for (let x = 1; x < width - 1; x += step) {
+          const center = grayscale[rowOffset + x];
+          const top = grayscale[topOffset + x];
+          const bot = grayscale[botOffset + x];
+          const left = grayscale[rowOffset + x - 1];
+          const right = grayscale[rowOffset + x + 1];
 
-        const lap = top + bot + left + right - 4 * center;
-        lapSum += lap;
-        lapSqSum += lap * lap;
-        sampleCount++;
+          const lap = top + bot + left + right - 4 * center;
+          lapSum += lap;
+          lapSqSum += lap * lap;
+          sampleCount++;
+        }
       }
+
+      const mean = sampleCount > 0 ? lapSum / sampleCount : 0;
+      laplacianVariance = sampleCount > 0 ? (lapSqSum / sampleCount) - (mean * mean) : 0;
     }
 
-    const mean = sampleCount > 0 ? lapSum / sampleCount : 0;
-    const laplacianVariance = sampleCount > 0 ? (lapSqSum / sampleCount) - (mean * mean) : 0;
-
-    // 3. Document Framing & Alignment estimation
+    // ── 3. Document Framing & Alignment Estimation ──
     // Check contrast along the expected 80% inner rectangle perimeter
     const marginX = Math.round(width * 0.1);
     const marginY = Math.round(height * 0.15);
@@ -105,7 +247,7 @@ export class QualityGate {
     const avgEdgeContrast = borderSampleCount > 0 ? borderEdgeSum / borderSampleCount : 0;
     const framingScore = Math.min(100, Math.round((avgEdgeContrast / 30) * 100));
 
-    // 4. Evaluate against thresholds
+    // ── 4. Evaluate against Operational Thresholds ──
     const isSharp = laplacianVariance >= CONFIG.THRESHOLDS.MIN_LAPLACIAN_VAR;
     const isLightingGood = overexposedPct <= CONFIG.THRESHOLDS.MAX_OVEREXPOSURE_PCT &&
                            underexposedPct <= CONFIG.THRESHOLDS.MAX_UNDEREXPOSURE_PCT;
@@ -116,19 +258,22 @@ export class QualityGate {
         passed: isSharp,
         variance: Math.round(laplacianVariance),
         threshold: CONFIG.THRESHOLDS.MIN_LAPLACIAN_VAR,
-        status: isSharp ? 'SHARP (PASSED)' : 'BLURRED (RETAKE RECOMMENDED)'
+        status: isSharp ? 'SHARP (PASSED)' : 'BLURRED (RETAKE RECOMMENDED)',
+        engine
       },
       glare: {
         passed: overexposedPct <= CONFIG.THRESHOLDS.MAX_OVEREXPOSURE_PCT,
         percent: Math.round(overexposedPct * 10) / 10,
         threshold: CONFIG.THRESHOLDS.MAX_OVEREXPOSURE_PCT,
-        status: overexposedPct <= CONFIG.THRESHOLDS.MAX_OVEREXPOSURE_PCT ? 'BALANCED' : 'HOTSPOT / GLARE DETECTED'
+        status: overexposedPct <= CONFIG.THRESHOLDS.MAX_OVEREXPOSURE_PCT ? 'BALANCED' : 'HOTSPOT / GLARE DETECTED',
+        engine
       },
       exposure: {
         passed: underexposedPct <= CONFIG.THRESHOLDS.MAX_UNDEREXPOSURE_PCT,
         percent: Math.round(underexposedPct * 10) / 10,
         threshold: CONFIG.THRESHOLDS.MAX_UNDEREXPOSURE_PCT,
-        status: underexposedPct <= CONFIG.THRESHOLDS.MAX_UNDEREXPOSURE_PCT ? 'SUFFICIENT' : 'UNDEREXPOSED'
+        status: underexposedPct <= CONFIG.THRESHOLDS.MAX_UNDEREXPOSURE_PCT ? 'SUFFICIENT' : 'UNDEREXPOSED',
+        engine
       },
       framing: {
         passed: isFramed,
@@ -145,13 +290,13 @@ export class QualityGate {
     if (!passedAll) {
       if (!isSharp) {
         retakePrompt = 'CAPTURE MOTION BLUR DETECTED';
-        guidanceAdvice = 'Stabilize device camera against the document boundary and hold steady.';
+        guidanceAdvice = `Image Laplacian variance (${Math.round(laplacianVariance)}) is below minimum sharpness threshold (${CONFIG.THRESHOLDS.MIN_LAPLACIAN_VAR}). Stabilize device camera and hold steady.`;
       } else if (overexposedPct > CONFIG.THRESHOLDS.MAX_OVEREXPOSURE_PCT) {
         retakePrompt = 'LIGHTING GLARE INTERFERENCE';
-        guidanceAdvice = 'Tilt document away from overhead lamp to eliminate specular glare on MRZ.';
+        guidanceAdvice = `Surface specular glare (${Math.round(overexposedPct * 10) / 10}%) exceeds threshold (${CONFIG.THRESHOLDS.MAX_OVEREXPOSURE_PCT}%). Tilt document away from overhead illumination.`;
       } else if (underexposedPct > CONFIG.THRESHOLDS.MAX_UNDEREXPOSURE_PCT) {
         retakePrompt = 'LOW AMBIENT ILLUMINATION';
-        guidanceAdvice = 'Increase checkpoint lighting or enable the device torch.';
+        guidanceAdvice = `Underexposed shadows (${Math.round(underexposedPct * 10) / 10}%) exceed threshold. Increase checkpoint lighting or enable device torch.`;
       } else if (!isFramed) {
         retakePrompt = 'DOCUMENT OUTSIDE ALIGNMENT GUIDE';
         guidanceAdvice = 'Position all 4 corners of the document inside the tactical viewfinder brackets.';
@@ -160,6 +305,7 @@ export class QualityGate {
 
     return {
       passed: passedAll,
+      engine,
       checks,
       retakePrompt,
       guidanceAdvice,
@@ -170,3 +316,4 @@ export class QualityGate {
     };
   }
 }
+
