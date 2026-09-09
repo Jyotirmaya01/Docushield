@@ -4,10 +4,31 @@
  * Falls back gracefully when backend is unreachable (offline-first).
  */
 
+export function safeTimeoutSignal(ms = 3000) {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    try {
+      return AbortSignal.timeout(ms);
+    } catch {}
+  }
+  const controller = new AbortController();
+  setTimeout(() => {
+    try { controller.abort(); } catch {}
+  }, ms);
+  return controller.signal;
+}
+
 export function getApiBase() {
-  const host = (typeof window !== 'undefined' && window.location && window.location.hostname && window.location.hostname !== 'localhost')
-    ? window.location.hostname
-    : '127.0.0.1';
+  if (typeof window === 'undefined') return 'http://127.0.0.1:8000/api';
+  const protocol = window.location?.protocol || 'http:';
+  const hostname = window.location?.hostname || '127.0.0.1';
+  const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0';
+
+  // If app is served over HTTPS (e.g. Vercel deployment), browsers block plain HTTP requests (Mixed Content)
+  if (protocol === 'https:' && !isLocal) {
+    return null;
+  }
+
+  const host = isLocal ? '127.0.0.1' : hostname;
   return `http://${host}:8000/api`;
 }
 
@@ -18,10 +39,12 @@ export class BackendAPI {
    * Check if backend is reachable
    */
   static async isAvailable() {
+    const base = getApiBase();
+    if (!base) return false;
     try {
-      const resp = await fetch(`${getApiBase()}/health`, { 
+      const resp = await fetch(`${base}/health`, { 
         method: 'GET',
-        signal: AbortSignal.timeout(1500) 
+        signal: safeTimeoutSignal(1200) 
       });
       return resp.ok;
     } catch {
@@ -87,7 +110,7 @@ export class BackendAPI {
       const resp = await fetch(`${API_BASE}/scans`, {
         method: 'POST',
         body: formData,
-        signal: AbortSignal.timeout(15000),
+        signal: safeTimeoutSignal(15000),
       });
 
       if (!resp.ok) {
@@ -133,7 +156,7 @@ export class BackendAPI {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(10000),
+        signal: safeTimeoutSignal(10000),
       });
 
       if (resp.ok) {
@@ -173,7 +196,7 @@ export class BackendAPI {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(10000),
+        signal: safeTimeoutSignal(10000),
       });
 
       if (resp.ok) {
@@ -198,7 +221,7 @@ export class BackendAPI {
   static async getExtractedFields(scanId) {
     try {
       const resp = await fetch(`${API_BASE}/scans/${scanId}/extracted-fields`, {
-        signal: AbortSignal.timeout(5000),
+        signal: safeTimeoutSignal(5000),
       });
       if (resp.ok) {
         const result = await resp.json();
@@ -230,7 +253,7 @@ export class BackendAPI {
           ledger_hash: decisionData.ledger_hash || null,
           risk_score: decisionData.risk_score || null,
         }),
-        signal: AbortSignal.timeout(10000),
+        signal: safeTimeoutSignal(10000),
       });
 
       if (resp.ok) {
@@ -249,7 +272,7 @@ export class BackendAPI {
   static async getScans(limit = 50) {
     try {
       const resp = await fetch(`${API_BASE}/scans?limit=${limit}`, {
-        signal: AbortSignal.timeout(5000),
+        signal: safeTimeoutSignal(5000),
       });
       if (resp.ok) return await resp.json();
     } catch (err) {
@@ -271,7 +294,7 @@ export class BackendAPI {
   static async getDashboardStats() {
     try {
       const resp = await fetch(`${API_BASE}/dashboard/stats`, {
-        signal: AbortSignal.timeout(5000),
+        signal: safeTimeoutSignal(5000),
       });
       if (resp.ok) return await resp.json();
     } catch (err) {
@@ -289,7 +312,7 @@ export class BackendAPI {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ officer_id: officerId, password: password }),
-        signal: AbortSignal.timeout(5000),
+        signal: safeTimeoutSignal(5000),
       });
       if (!resp.ok) return null;
       return await resp.json();
@@ -312,7 +335,7 @@ export class BackendAPI {
         method: 'POST',
         headers,
         body: JSON.stringify(entries),
-        signal: AbortSignal.timeout(10000),
+        signal: safeTimeoutSignal(10000),
       });
       return { ok: resp.ok, status: resp.status, data: await resp.json() };
     } catch (err) {
@@ -331,7 +354,7 @@ export class BackendAPI {
 
       const resp = await fetch(`${API_BASE}/ledger/lookup?document_id=${encodeURIComponent(documentId)}`, {
         headers,
-        signal: AbortSignal.timeout(4000),
+        signal: safeTimeoutSignal(4000),
       });
       if (resp.ok) return await resp.json();
     } catch (err) {
@@ -352,7 +375,7 @@ export class BackendAPI {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(6000),
+        signal: safeTimeoutSignal(6000),
       });
       if (resp.ok) return await resp.json();
     } catch (err) {
@@ -368,7 +391,7 @@ export class BackendAPI {
     try {
       const resp = await fetch(`${API_BASE}/audit-log?checkpoint_id=${encodeURIComponent(checkpointId)}&limit=${limit}`, {
         headers: { 'Authorization': `Bearer ${sessionToken}` },
-        signal: AbortSignal.timeout(5000),
+        signal: safeTimeoutSignal(5000),
       });
       if (resp.ok) return await resp.json();
     } catch (err) {
@@ -384,7 +407,7 @@ export class BackendAPI {
     try {
       const resp = await fetch(`${API_BASE}/audit-log/all?limit=${limit}`, {
         headers: { 'Authorization': `Bearer ${sessionToken}` },
-        signal: AbortSignal.timeout(5000),
+        signal: safeTimeoutSignal(5000),
       });
       if (resp.ok) return await resp.json();
     } catch (err) {
@@ -400,7 +423,7 @@ export class BackendAPI {
     try {
       const resp = await fetch(`${API_BASE}/checkpoints`, {
         headers: { 'Authorization': `Bearer ${sessionToken}` },
-        signal: AbortSignal.timeout(5000),
+        signal: safeTimeoutSignal(5000),
       });
       if (resp.ok) return await resp.json();
     } catch (err) {
@@ -421,7 +444,7 @@ export class BackendAPI {
           'Authorization': `Bearer ${sessionToken}`,
         },
         body: JSON.stringify(checkpointData),
-        signal: AbortSignal.timeout(5000),
+        signal: safeTimeoutSignal(5000),
       });
       if (resp.ok) return await resp.json();
     } catch (err) {

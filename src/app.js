@@ -32,6 +32,7 @@ class DocuShieldApp {
     this.reviewQueue = [];
     this.selectedQueueItem = null;
     this.selectedDocType = this.activeSpecimen?.document_type || 'passport';
+    this.isLoggingIn = false;
 
     // Load persisted review queue
     this.loadQueue();
@@ -88,6 +89,11 @@ class DocuShieldApp {
   }
 
   async init() {
+    // Bind all interactive events immediately so login and buttons respond instantly
+    this.bindEvents();
+    this.updateSyncUI();
+    syncInstance.subscribe(() => this.updateSyncUI());
+
     try {
       await AuthManager.initDatabase();
     } catch (e) {
@@ -103,18 +109,17 @@ class DocuShieldApp {
       console.warn('[DocuShield DB] IndexedDB initialization note:', e);
     }
 
-    // Step 3: Initialize Pretrained Tesseract.js OCR Engine
+    // Step 3: Initialize Pretrained Tesseract.js OCR Engine (non-blocking for UI responsiveness)
     try {
-      await OCREngine.init();
-      window.OCREngine = OCREngine;
-      window.runSampleOCRTest = () => this.handleRunOCRTest();
+      OCREngine.init().then(() => {
+        window.OCREngine = OCREngine;
+        window.runSampleOCRTest = () => this.handleRunOCRTest();
+      }).catch(err => {
+        console.warn('[DocuShield OCR] Background OCR init note:', err);
+      });
     } catch (e) {
       console.warn('[DocuShield OCR] OCREngine initialization note:', e);
     }
-
-    this.bindEvents();
-    this.updateSyncUI();
-    syncInstance.subscribe(() => this.updateSyncUI());
 
     const activeSession = AuthManager.getActiveSession();
     if (activeSession && activeSession.role === 'OFFICER') {
@@ -130,6 +135,8 @@ class DocuShieldApp {
     BackendAPI.isAvailable().then(available => {
       this.backendAvailable = available;
       console.log(`[DocuShield] Backend SQLite: ${available ? '✅ CONNECTED' : '⚠️ OFFLINE (local-only mode)'}`);
+    }).catch(() => {
+      this.backendAvailable = false;
     });
   }
 
@@ -276,34 +283,48 @@ class DocuShieldApp {
   }
 
   async submitOfficerLogin(e) {
-    if (e && e.preventDefault) e.preventDefault();
+    if (e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    if (this.isLoggingIn) return false;
+    this.isLoggingIn = true;
+
     const officerError = document.getElementById('officer-login-error');
     const officerErrorText = document.getElementById('officer-login-error-text');
     const officerLoginBtn = document.getElementById('btn-officer-login');
     officerError?.classList.add('hidden');
 
-    const officerId = document.getElementById('login-officer-id')?.value.trim();
-    const password = document.getElementById('login-officer-password')?.value;
+    const officerIdInput = document.getElementById('login-officer-id');
+    const passwordInput = document.getElementById('login-officer-password');
+    const officerId = (officerIdInput?.value || '').trim();
+    const password = passwordInput?.value || '';
 
     if (!officerId) {
-      if (officerErrorText) officerErrorText.textContent = 'Please enter your Officer Serial ID.';
+      if (officerErrorText) officerErrorText.textContent = 'Please enter Officer Serial ID.';
       officerError?.classList.remove('hidden');
+      this.isLoggingIn = false;
       return false;
     }
 
     if (officerLoginBtn) {
       officerLoginBtn.disabled = true;
-      officerLoginBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Verifying Serial ID...</span>';
+      officerLoginBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Authenticating Terminal...</span>';
     }
 
     try {
       const res = await AuthManager.loginOfficer(officerId, password);
-      if (res.success) {
-        this.applyOfficerSession(res.officer, false);
-        this.showToast(`✅ Terminal Unlocked: ${res.officer.fullName} (${res.officer.id})`);
-        this.navigateTo('dashboard');
+      if (res && res.success) {
+        if (res.isAdmin) {
+          this.showToast('🛡️ Sector Admin Authority Verified');
+          this.navigateTo('admin');
+        } else {
+          this.applyOfficerSession(res.officer, false);
+          this.showToast(`✅ Terminal Unlocked: ${res.officer.fullName} (${res.officer.id})`);
+          this.navigateTo('dashboard');
+        }
       } else {
-        if (officerErrorText) officerErrorText.textContent = res.error || 'Authentication rejected.';
+        if (officerErrorText) officerErrorText.textContent = (res && res.error) || 'Authentication rejected.';
         officerError?.classList.remove('hidden');
       }
     } catch (err) {
@@ -311,9 +332,54 @@ class DocuShieldApp {
       if (officerErrorText) officerErrorText.textContent = 'Authentication service error. Check connection.';
       officerError?.classList.remove('hidden');
     } finally {
+      this.isLoggingIn = false;
       if (officerLoginBtn) {
         officerLoginBtn.disabled = false;
-        officerLoginBtn.innerHTML = '<span>Authenticate &amp; Open Console</span><span class="material-symbols-outlined text-[18px]">login</span>';
+        officerLoginBtn.innerHTML = '<span>Sign In to Inspection Console</span><span class="material-symbols-outlined text-[18px]">login</span>';
+      }
+    }
+    return false;
+  }
+
+  async submitAdminLogin(e) {
+    if (e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    if (this.isLoggingIn) return false;
+    this.isLoggingIn = true;
+
+    const adminError = document.getElementById('admin-login-error');
+    const adminErrorText = document.getElementById('admin-login-error-text');
+    const adminLoginBtn = document.getElementById('btn-admin-login');
+    adminError?.classList.add('hidden');
+
+    const adminId = (document.getElementById('login-admin-id')?.value || 'ADMIN-01').trim();
+    const password = document.getElementById('login-admin-password')?.value || '';
+
+    if (adminLoginBtn) {
+      adminLoginBtn.disabled = true;
+      adminLoginBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Verifying Authority...</span>';
+    }
+
+    try {
+      const res = await AuthManager.loginAdmin(adminId, password);
+      if (res && res.success) {
+        this.showToast('🛡️ Sector Admin Authority Verified');
+        this.navigateTo('admin');
+      } else {
+        if (adminErrorText) adminErrorText.textContent = (res && res.error) || 'Admin authentication failed.';
+        adminError?.classList.remove('hidden');
+      }
+    } catch (err) {
+      console.error('Admin login error:', err);
+      if (adminErrorText) adminErrorText.textContent = 'Admin service connection error.';
+      adminError?.classList.remove('hidden');
+    } finally {
+      this.isLoggingIn = false;
+      if (adminLoginBtn) {
+        adminLoginBtn.disabled = false;
+        adminLoginBtn.innerHTML = '<span>Sign In to Admin Console</span><span class="material-symbols-outlined text-[18px]">admin_panel_settings</span>';
       }
     }
     return false;
@@ -329,7 +395,9 @@ class DocuShieldApp {
     const session = AuthManager.getActiveSession();
     if (session && session.role === 'ADMIN') {
       this.navigateTo('admin');
+      this.renderAdminRoster();
     } else {
+      this.showToast('⚠️ Sector Admin Authority Required');
       this.navigateTo('login');
       this.switchLoginTab('admin');
     }
@@ -2358,40 +2426,10 @@ class DocuShieldApp {
 
     // --- SECTOR COMMAND ADMIN LOGIN ---
     const adminForm = document.getElementById('admin-login-form');
-    const adminError = document.getElementById('admin-login-error');
-    const adminErrorText = document.getElementById('admin-login-error-text');
-    const adminLoginBtn = document.getElementById('btn-admin-login');
+    adminForm?.addEventListener('submit', (e) => this.submitAdminLogin(e));
 
-    adminForm?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      adminError?.classList.add('hidden');
-      const adminId = document.getElementById('login-admin-id')?.value.trim();
-      const password = document.getElementById('login-admin-password')?.value;
-
-      if (adminLoginBtn) {
-        adminLoginBtn.disabled = true;
-        adminLoginBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Verifying Authority...</span>';
-      }
-
-      const res = await AuthManager.loginAdmin(adminId, password);
-
-      if (adminLoginBtn) {
-        adminLoginBtn.disabled = false;
-        adminLoginBtn.innerHTML = '<span>Verify Authority &amp; Open Admin Console</span><span class="material-symbols-outlined text-[18px]">admin_panel_settings</span>';
-      }
-
-      if (res.success) {
-        this.showToast('🛡️ Sector Admin Authority Verified');
-        this.navigateTo('admin');
-      } else {
-        if (adminErrorText) adminErrorText.textContent = res.error;
-        adminError?.classList.remove('hidden');
-      }
-    });
-
-    // --- ADMIN TO TERMINAL & PROFILE OPEN ADMIN ---
+    // --- ADMIN TO TERMINAL NAVIGATION ---
     document.getElementById('admin-to-terminal-btn')?.addEventListener('click', () => this.navigateTo('dashboard'));
-    document.getElementById('btn-profile-open-admin')?.addEventListener('click', () => this.openAdminConsole());
 
     // --- ADMIN CONSOLE LOGOUT & ADD OFFICER ---
     const adminLogoutBtn = document.getElementById('admin-logout-btn');
@@ -2459,11 +2497,6 @@ class DocuShieldApp {
     const adminToTerminalBtn = document.getElementById('admin-to-terminal-btn');
     adminToTerminalBtn?.addEventListener('click', () => {
       this.navigateTo('dashboard');
-    });
-
-    const profileOpenAdminBtn = document.getElementById('btn-profile-open-admin');
-    profileOpenAdminBtn?.addEventListener('click', () => {
-      this.navigateTo('admin');
     });
 
     // Sub-Tabs

@@ -189,7 +189,7 @@
           </div>
         </div>
 
-        <form id="officer-login-form" onsubmit="return window.app ? window.app.submitOfficerLogin(event) : false" class="bg-surface-container rounded-2xl p-space-base border border-outline/20 flex flex-col gap-space-md shadow-xl">
+        <form id="officer-login-form" onsubmit="event.preventDefault(); window.app ? window.app.submitOfficerLogin(event) : false; return false;" class="bg-surface-container rounded-2xl p-space-base border border-outline/20 flex flex-col gap-space-md shadow-xl">
           <div class="flex flex-col gap-1.5">
             <label class="text-xs font-semibold text-on-surface-variant flex justify-between">
               <span>Officer Serial ID</span>
@@ -282,7 +282,7 @@
           </div>
         </div>
 
-        <form id="admin-login-form" class="bg-surface-container rounded-2xl p-space-base border border-outline/20 flex flex-col gap-space-md shadow-xl">
+        <form id="admin-login-form" onsubmit="event.preventDefault(); window.app ? window.app.submitAdminLogin(event) : false; return false;" class="bg-surface-container rounded-2xl p-space-base border border-outline/20 flex flex-col gap-space-md shadow-xl">
           <div class="flex flex-col gap-1.5">
             <label class="text-xs font-semibold text-on-surface-variant flex justify-between">
               <span>Admin Authority ID</span>
@@ -1272,12 +1272,7 @@ NP882194&lt;4NPL8811232M2905096&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&
       </div>
 
       <div class="pt-1 flex flex-col gap-2.5">
-        <button type="button" id="btn-profile-open-admin" onclick="window.app?.openAdminConsole?.()" class="w-full py-3 rounded-xl bg-surface-container-high hover:bg-surface-container text-on-surface font-bold text-xs uppercase tracking-wider transition-all border border-outline/20 flex items-center justify-center gap-2 shadow-sm">
-          <span class="material-symbols-outlined text-[18px] text-tertiary">admin_panel_settings</span>
-          <span>Open Sector Command Admin Console</span>
-        </button>
-
-        <button type="button" onclick="window.app.navigateTo('login')" class="w-full py-3 rounded-xl bg-error/15 text-error font-semibold text-xs uppercase tracking-wider hover:bg-error/25 transition-all border border-error/30 flex items-center justify-center gap-2">
+        <button type="button" onclick="window.app ? window.app.logoutOfficer() : window.location.reload()" class="w-full py-3 rounded-xl bg-error/15 text-error font-semibold text-xs uppercase tracking-wider hover:bg-error/25 transition-all border border-error/30 flex items-center justify-center gap-2 shadow-sm">
           <span class="material-symbols-outlined text-[18px]">logout</span>
           <span>Sign Out &amp; End Shift</span>
         </button>
