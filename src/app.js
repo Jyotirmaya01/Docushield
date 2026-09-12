@@ -461,7 +461,7 @@ class DocuShieldApp {
               <span class="text-xs text-on-surface-variant block sm:inline sm:ml-2">All document verification and forensic checks active.</span>
             </div>
           </div>
-          <button type="button" onclick="window.app.logoutOfficer()" class="px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-xs text-on-surface font-semibold transition-all flex-shrink-0 border border-outline/20">
+          <button type="button" onclick="window.app?.logoutOfficer?.()" class="px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-xs text-on-surface font-semibold transition-all flex-shrink-0 border border-outline/20">
             Exit Demo
           </button>
         `;
@@ -494,7 +494,7 @@ class DocuShieldApp {
               <span class="text-xs text-on-surface-variant block sm:inline sm:ml-2">Station verified for ${fullName} (${rank}).</span>
             </div>
           </div>
-          <button type="button" onclick="window.app.logoutOfficer()" class="px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-error/15 text-xs text-on-surface hover:text-error font-semibold transition-all flex-shrink-0 border border-outline/20">
+          <button type="button" onclick="window.app?.logoutOfficer?.()" class="px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-error/15 text-xs text-on-surface hover:text-error font-semibold transition-all flex-shrink-0 border border-outline/20">
             Sign Out
           </button>
         `;
@@ -667,9 +667,13 @@ class DocuShieldApp {
 
     if (!quality) return;
 
-    if (glareVal) glareVal.textContent = `${quality.checks.glare.status} (${quality.overexposedPct}%)`;
-    if (framingVal) framingVal.textContent = `${quality.checks.framing.status} (${quality.framingScore}%)`;
-    if (blurVal) blurVal.textContent = `${quality.checks.blur.status} (VAR: ${quality.laplacianVariance})`;
+    const glareStatus = quality.checks?.glare?.status || (quality.overexposedPct > 5 ? 'FAIL' : 'PASS');
+    const framingStatus = quality.checks?.framing?.status || (quality.framingScore > 80 ? 'PASS' : 'ADJUST');
+    const blurStatus = quality.checks?.blur?.status || (quality.laplacianVariance >= 100 ? 'PASS' : 'BLURRY');
+
+    if (glareVal) glareVal.textContent = `${glareStatus} (${quality.overexposedPct ?? 0}%)`;
+    if (framingVal) framingVal.textContent = `${framingStatus} (${quality.framingScore ?? 95}%)`;
+    if (blurVal) blurVal.textContent = `${blurStatus} (VAR: ${quality.laplacianVariance ?? 150})`;
 
     if (quality.passed) {
       if (hudBanner) hudBanner.className = 'w-full flex items-center justify-between px-space-md py-space-sm rounded-xl bg-surface-container border border-secondary/40 transition-colors duration-300';

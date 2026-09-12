@@ -7,7 +7,7 @@
 // 1. Load Local Workbox Service Worker Bundle (Zero external network dependencies)
 importScripts('./assets/vendor/workbox-sw.js');
 
-const CACHE_VERSION = 'v8-verified';
+const CACHE_VERSION = 'v9-clean';
 const CACHE_NAME = `docushield-${CACHE_VERSION}`;
 
 // Complete App Shell & Offline Assets Manifest (HTML, CSS, JS, Vendor, Models, Icons)
@@ -162,12 +162,27 @@ if (self.workbox) {
     })
   );
 
-  // 3. Local Static Scripts, Styles, & Images
+  // 3. Application Source Scripts: NetworkFirst ensures latest code is delivered instantly without stale cache bugs, with offline fallback
   workbox.routing.registerRoute(
     ({ request, url }) =>
       url.origin === self.location.origin &&
-      (request.destination === 'script' ||
-       request.destination === 'style' ||
+      (url.pathname.includes('/src/') || (request.destination === 'script' && !url.pathname.includes('/assets/vendor/'))),
+    new workbox.strategies.NetworkFirst({
+      cacheName: `${CACHE_NAME}-app-scripts`,
+      networkTimeoutSeconds: 1.5,
+      plugins: [
+        new workbox.cacheableResponse.CacheableResponsePlugin({
+          statuses: [0, 200]
+        })
+      ]
+    })
+  );
+
+  // 4. Local Static Styles & Images: StaleWhileRevalidate
+  workbox.routing.registerRoute(
+    ({ request, url }) =>
+      url.origin === self.location.origin &&
+      (request.destination === 'style' ||
        request.destination === 'image' ||
        request.destination === 'font'),
     new workbox.strategies.StaleWhileRevalidate({
