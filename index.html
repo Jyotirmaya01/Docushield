@@ -452,19 +452,24 @@
           <span class="material-symbols-outlined text-[20px]">cameraswitch</span>
         </button>
       </div>
-
-      <!-- Document Type Selection Ribbon (Officer Selection at Capture Time) -->
-      <div class="flex items-center justify-between gap-space-sm px-space-md py-2 rounded-xl bg-surface-container border border-outline/30 shadow-sm">
+      <!-- Document Type Selection Ribbon & Auto-Capture Controller -->
+      <div class="flex items-center justify-between gap-space-sm pb-1 flex-wrap">
         <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-[20px] text-primary">badge</span>
+          <span class="material-symbols-outlined text-[18px] text-primary">badge</span>
           <label for="capture-doc-type-select" class="text-xs font-bold text-on-surface uppercase tracking-wide">Document Type:</label>
         </div>
-        <div class="relative flex-1 max-w-[240px]">
-          <select id="capture-doc-type-select" class="w-full bg-surface-container-highest text-on-surface font-semibold text-xs rounded-lg px-3 py-2 border border-outline/40 focus:outline-none focus:border-primary cursor-pointer transition-colors shadow-inner">
-            <option value="passport" selected>🛂 Passport (ICAO 9303)</option>
-            <option value="national_id">🪪 National ID Card</option>
-            <option value="visa">📄 Entry / Transit Visa</option>
-          </select>
+        <div class="flex items-center gap-2 flex-wrap">
+          <div class="relative flex-1 max-w-[220px]">
+            <select id="capture-doc-type-select" class="w-full bg-surface-container-highest text-on-surface font-semibold text-xs rounded-lg px-3 py-2 border border-outline/40 focus:outline-none focus:border-primary cursor-pointer transition-colors shadow-inner">
+              <option value="passport" selected>🛂 Passport (ICAO 9303)</option>
+              <option value="national_id">🪪 National ID Card</option>
+              <option value="visa">📄 Entry / Transit Visa</option>
+            </select>
+          </div>
+          <button type="button" id="toggle-autocapture-btn" class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-secondary/15 border border-secondary/40 text-[11px] font-bold text-secondary hover:bg-secondary/25 transition-all cursor-pointer shadow-sm" title="Automatically captures when document is clear and details are properly visible">
+            <span id="autocapture-icon" class="material-symbols-outlined text-[16px] text-secondary">bolt</span>
+            <span id="autocapture-label">AUTO-CAPTURE: ON</span>
+          </button>
         </div>
       </div>
 
@@ -488,6 +493,8 @@
         <canvas id="camera-canvas" class="hidden"></canvas>
         <!-- Specimen Preview Image Fallback -->
         <div id="specimen-preview-img" class="absolute inset-0 bg-cover bg-center opacity-95 transition-all duration-300" style="background-image: url('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&auto=format&fit=crop&q=80');"></div>
+        <!-- Flash Overlay for Auto-Capture and Manual Capture -->
+        <div id="camera-flash-overlay" class="absolute inset-0 bg-white opacity-0 pointer-events-none transition-opacity duration-200 z-30"></div>
 
         <!-- Clean Boundary Guide Overlay -->
         <div class="relative w-[88%] h-[76%] rounded-2xl pointer-events-none flex flex-col justify-between p-3 border-2 border-primary/50 shadow-lg">
@@ -535,7 +542,7 @@
         </div>
 
         <!-- Overlaid Quality Telemetry Bar -->
-        <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between px-3 py-2 rounded-xl bg-surface/90 backdrop-blur-md border border-outline/20 text-xs">
+        <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between px-3 py-2 rounded-xl bg-surface/90 backdrop-blur-md border border-outline/20 text-xs flex-wrap gap-2">
           <div class="flex items-center gap-1">
             <span class="text-on-surface-variant">Lighting:</span>
             <span id="telemetry-glare-val" class="text-secondary font-bold">Good (2.1%)</span>
@@ -547,6 +554,10 @@
           <div class="flex items-center gap-1">
             <span class="text-on-surface-variant">Focus:</span>
             <span id="telemetry-blur-val" class="text-secondary font-bold">Sharp</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <span class="text-on-surface-variant">Details:</span>
+            <span id="telemetry-details-val" class="text-secondary font-bold">Legible</span>
           </div>
         </div>
       </div>

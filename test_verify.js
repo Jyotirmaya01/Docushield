@@ -88,4 +88,73 @@ if (ocrRes6.name !== 'AMITA CHEN' || ocrRes6.document_number !== 'K9928103' || o
   process.exit(1);
 }
 
-console.log('--- ALL PIPELINE & OCR EXTRACTION TESTS PASSED! ---');
+console.log('--- 3. Testing QualityGate Auto-Capture & Detail Detection ---');
+import { QualityGate } from './src/cv/qualityGate.js';
+
+// Case G: Clear document with high-frequency text details ready for auto-capture
+const mockW = 360;
+const mockH = 270;
+const mockBuf = new Uint8ClampedArray(mockW * mockH * 4);
+
+// Background
+for (let i = 0; i < mockW * mockH; i++) {
+  mockBuf[i * 4] = 235;
+  mockBuf[i * 4 + 1] = 235;
+  mockBuf[i * 4 + 2] = 235;
+  mockBuf[i * 4 + 3] = 255;
+}
+
+// Inner document edges & high contrast boundary
+for (let x = 36; x < 324; x++) {
+  const top = (40 * mockW + x) * 4;
+  const bot = (230 * mockW + x) * 4;
+  mockBuf[top] = 20; mockBuf[top+1] = 20; mockBuf[top+2] = 20;
+  mockBuf[bot] = 20; mockBuf[bot+1] = 20; mockBuf[bot+2] = 20;
+}
+for (let y = 40; y < 230; y++) {
+  const left = (y * mockW + 36) * 4;
+  const right = (y * mockW + 324) * 4;
+  mockBuf[left] = 20; mockBuf[left+1] = 20; mockBuf[left+2] = 20;
+  mockBuf[right] = 20; mockBuf[right+1] = 20; mockBuf[right+2] = 20;
+}
+
+// Draw alternating high-contrast text lines inside document body
+for (let y = 60; y < 210; y += 8) {
+  for (let x = 60; x < 300; x += 3) {
+    const idx = (y * mockW + x) * 4;
+    mockBuf[idx] = 10; mockBuf[idx+1] = 10; mockBuf[idx+2] = 10;
+  }
+}
+
+const mockImg = { width: mockW, height: mockH, data: mockBuf };
+const qRes = QualityGate.analyzeImageQuality(mockImg);
+console.log('QualityGate Auto-Capture Check:', {
+  passed: qRes.passed,
+  hasDocument: qRes.hasDocument,
+  detailsVisible: qRes.detailsVisible,
+  readyForAutoCapture: qRes.readyForAutoCapture,
+  laplacianVariance: qRes.laplacianVariance,
+  detailDensityPct: qRes.detailDensityPct
+});
+
+if (!qRes.hasDocument || !qRes.detailsVisible || !qRes.readyForAutoCapture) {
+  console.error('FAIL: Sharp document with visible text details must trigger readyForAutoCapture!');
+  process.exit(1);
+}
+
+// Case H: Blank blurry surface must NOT trigger auto-capture
+const blankBuf = new Uint8ClampedArray(mockW * mockH * 4);
+for (let i = 0; i < mockW * mockH; i++) {
+  blankBuf[i * 4] = 180;
+  blankBuf[i * 4 + 1] = 180;
+  blankBuf[i * 4 + 2] = 180;
+  blankBuf[i * 4 + 3] = 255;
+}
+const blankQ = QualityGate.analyzeImageQuality({ width: mockW, height: mockH, data: blankBuf });
+console.log('Blank surface check (should NOT auto-capture):', { readyForAutoCapture: blankQ.readyForAutoCapture });
+if (blankQ.readyForAutoCapture) {
+  console.error('FAIL: Blank surface must never trigger auto-capture!');
+  process.exit(1);
+}
+
+console.log('--- ALL PIPELINE, OCR, AND AUTO-CAPTURE TESTS PASSED! ---');

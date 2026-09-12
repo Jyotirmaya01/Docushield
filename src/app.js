@@ -33,6 +33,10 @@ class DocuShieldApp {
     this.selectedQueueItem = null;
     this.selectedDocType = this.activeSpecimen?.document_type || 'passport';
     this.isLoggingIn = false;
+    this.autoCaptureEnabled = true;
+    this.autoCaptureStabilityCount = 0;
+    this.autoCaptureRequiredFrames = 2; // ~700ms of consecutive clear hold
+    this.isCapturing = false;
 
     // Load persisted review queue
     this.loadQueue();
@@ -635,21 +639,130 @@ class DocuShieldApp {
       this.videoStream = null;
     }
     this.cameraActive = false;
+    this.isCapturing = false;
+    this.autoCaptureStabilityCount = 0;
   }
 
   startQualityTelemetry(video, canvas) {
     if (this.analysisInterval) clearInterval(this.analysisInterval);
     const ctx = canvas.getContext('2d');
+    this.autoCaptureStabilityCount = 0;
 
-    this.analysisInterval = setInterval(() => {
-      if (!this.cameraActive || video.videoWidth === 0) return;
+    this.analysisInterval = setInterval(async () => {
+      if (!this.cameraActive || video.videoWidth === 0 || this.isCapturing) return;
       canvas.width = 360;
       canvas.height = 270;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       const quality = QualityGate.analyzeImageQuality(canvas);
       this.updateQualityHUD(quality);
-    }, 400);
+
+      // Auto-Capture check: if document is present, clear, and details are properly visible
+      if (this.autoCaptureEnabled && quality && quality.readyForAutoCapture) {
+        this.autoCaptureStabilityCount++;
+        const pct = Math.min(100, Math.round((this.autoCaptureStabilityCount / this.autoCaptureRequiredFrames) * 100));
+        this.updateAutoCaptureHUD(pct, quality);
+
+        if (this.autoCaptureStabilityCount >= this.autoCaptureRequiredFrames) {
+          this.isCapturing = true;
+          this.triggerCameraFlash();
+          this.showToast('📸 Document clear & details verified — Auto-capturing...');
+          console.log('[Auto-Capture] Document detected with sharp clarity & legible details. Triggering auto-capture.');
+          await this.triggerCapture();
+        }
+      } else {
+        if (this.autoCaptureStabilityCount > 0) {
+          this.autoCaptureStabilityCount = 0;
+          this.updateAutoCaptureHUD(0, quality);
+        }
+      }
+    }, 350);
+  }
+
+  updateAutoCaptureHUD(pct, quality) {
+    const hudBanner = document.getElementById('hud-status-banner');
+    const hudText = document.getElementById('hud-text');
+    const hudDetail = document.getElementById('hud-detail');
+    const hudLockPct = document.getElementById('hud-lock-pct');
+    const hudIcon = document.getElementById('hud-icon');
+    const bracketMarks = document.querySelectorAll('.bracket-mark');
+
+    if (pct > 0 && pct < 100) {
+      if (hudBanner) {
+        hudBanner.className = 'w-full flex items-center justify-between px-space-md py-space-sm rounded-xl bg-surface-container border-2 border-primary ring-2 ring-primary/30 transition-all duration-200 shadow-lg';
+      }
+      if (hudText) {
+        hudText.textContent = `DOCUMENT DETECTED & CLEAR · HOLD STEADY (${pct}%)`;
+        hudText.className = 'text-xs font-bold text-primary uppercase tracking-wide animate-pulse';
+      }
+      if (hudDetail) {
+        hudDetail.textContent = 'Details sharp & legible · Auto-capturing in a moment...';
+      }
+      if (hudLockPct) {
+        hudLockPct.textContent = `${pct}%`;
+        hudLockPct.className = 'text-xs font-bold text-primary px-2.5 py-1 rounded-lg bg-primary/15 border border-primary/40 font-mono';
+      }
+      if (hudIcon) {
+        hudIcon.textContent = 'center_focus_strong';
+        hudIcon.className = 'material-symbols-outlined text-[22px] text-primary animate-spin';
+      }
+      bracketMarks.forEach(bm => {
+        bm.style.backgroundColor = '#0284c7';
+      });
+    } else if (pct >= 100) {
+      if (hudBanner) {
+        hudBanner.className = 'w-full flex items-center justify-between px-space-md py-space-sm rounded-xl bg-surface-container border-2 border-secondary shadow-lg transition-all duration-200';
+      }
+      if (hudText) {
+        hudText.textContent = '📸 DOCUMENT CAPTURED · PROCESSING...';
+        hudText.className = 'text-xs font-bold text-secondary uppercase tracking-wide';
+      }
+      if (hudDetail) {
+        hudDetail.textContent = 'Document captured automatically with high fidelity';
+      }
+      if (hudLockPct) {
+        hudLockPct.textContent = 'LOCKED';
+        hudLockPct.className = 'text-xs font-bold text-secondary px-2.5 py-1 rounded-lg bg-secondary/20 font-mono';
+      }
+      if (hudIcon) {
+        hudIcon.textContent = 'photo_camera';
+        hudIcon.className = 'material-symbols-outlined text-[22px] text-secondary';
+      }
+      bracketMarks.forEach(bm => {
+        bm.style.backgroundColor = '#10b981';
+      });
+    }
+  }
+
+  triggerCameraFlash() {
+    const flash = document.getElementById('camera-flash-overlay');
+    if (!flash) return;
+    flash.classList.remove('opacity-0');
+    flash.classList.add('opacity-90');
+    setTimeout(() => {
+      flash.classList.remove('opacity-90');
+      flash.classList.add('opacity-0');
+    }, 180);
+  }
+
+  toggleAutoCapture() {
+    this.autoCaptureEnabled = !this.autoCaptureEnabled;
+    this.autoCaptureStabilityCount = 0;
+    const btn = document.getElementById('toggle-autocapture-btn');
+    const label = document.getElementById('autocapture-label');
+    const icon = document.getElementById('autocapture-icon');
+
+    if (this.autoCaptureEnabled) {
+      if (btn) btn.className = 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-secondary/15 border border-secondary/40 text-[11px] font-bold text-secondary hover:bg-secondary/25 transition-all cursor-pointer shadow-sm';
+      if (label) label.textContent = 'AUTO-CAPTURE: ON';
+      if (icon) icon.textContent = 'bolt';
+      this.showToast('⚡ Auto-Capture Enabled (Captures automatically when clear)');
+    } else {
+      if (btn) btn.className = 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-container-high border border-outline/30 text-[11px] font-bold text-on-surface-variant hover:bg-surface-bright transition-all cursor-pointer shadow-sm';
+      if (label) label.textContent = 'AUTO-CAPTURE: OFF';
+      if (icon) icon.textContent = 'flash_off';
+      this.showToast('ℹ️ Auto-Capture Disabled (Manual shutter button only)');
+    }
   }
 
   updateQualityHUD(quality) {
@@ -664,24 +777,30 @@ class DocuShieldApp {
     const glareVal = document.getElementById('telemetry-glare-val');
     const framingVal = document.getElementById('telemetry-framing-val');
     const blurVal = document.getElementById('telemetry-blur-val');
+    const detailsVal = document.getElementById('telemetry-details-val');
 
     if (!quality) return;
 
     const glareStatus = quality.checks?.glare?.status || (quality.overexposedPct > 5 ? 'FAIL' : 'PASS');
     const framingStatus = quality.checks?.framing?.status || (quality.framingScore > 80 ? 'PASS' : 'ADJUST');
     const blurStatus = quality.checks?.blur?.status || (quality.laplacianVariance >= 100 ? 'PASS' : 'BLURRY');
+    const detailsStatus = quality.detailsVisible ? 'LEGIBLE' : (quality.hasDocument ? 'HOLD STILL' : 'SEARCHING');
 
     if (glareVal) glareVal.textContent = `${glareStatus} (${quality.overexposedPct ?? 0}%)`;
     if (framingVal) framingVal.textContent = `${framingStatus} (${quality.framingScore ?? 95}%)`;
     if (blurVal) blurVal.textContent = `${blurStatus} (VAR: ${quality.laplacianVariance ?? 150})`;
+    if (detailsVal) detailsVal.textContent = `${detailsStatus} (${quality.detailDensityPct ?? 0}%)`;
 
-    if (quality.passed) {
+    // Only update banner if not currently showing auto-capture progress
+    if (this.autoCaptureStabilityCount > 0) return;
+
+    if (quality.passed && quality.hasDocument && quality.detailsVisible) {
       if (hudBanner) hudBanner.className = 'w-full flex items-center justify-between px-space-md py-space-sm rounded-xl bg-surface-container border border-secondary/40 transition-colors duration-300';
       if (hudText) {
-        hudText.textContent = 'DOCUMENT POSITIONED · READY TO SCAN';
+        hudText.textContent = this.autoCaptureEnabled ? 'DOCUMENT CLEAR · READY TO AUTO-CAPTURE' : 'DOCUMENT CLEAR · READY TO SCAN';
         hudText.className = 'text-xs font-bold text-secondary uppercase tracking-wide';
       }
-      if (hudDetail) hudDetail.textContent = 'Hold passport steady inside the alignment frame';
+      if (hudDetail) hudDetail.textContent = 'Details legible and sharp. Hold still.';
       if (hudLockPct) hudLockPct.textContent = 'READY';
       if (hudIcon) {
         hudIcon.textContent = 'verified';
@@ -690,13 +809,35 @@ class DocuShieldApp {
       bracketMarks.forEach(bm => {
         bm.style.backgroundColor = '#10b981';
       });
+    } else if (quality.hasDocument) {
+      // Document is in frame but not yet clear enough
+      if (hudBanner) hudBanner.className = 'w-full flex items-center justify-between px-space-md py-space-sm rounded-xl bg-surface-container border border-primary/40 transition-colors duration-300';
+      if (hudText) {
+        if (!quality.checks?.blur?.passed) {
+          hudText.textContent = 'DOCUMENT DETECTED · HOLD STEADY TO FOCUS';
+        } else if (!quality.checks?.glare?.passed) {
+          hudText.textContent = 'DOCUMENT DETECTED · TILT AWAY FROM GLARE';
+        } else {
+          hudText.textContent = quality.retakePrompt || 'DOCUMENT DETECTED · ALIGNING';
+        }
+        hudText.className = 'text-xs font-bold text-primary uppercase tracking-wide';
+      }
+      if (hudDetail) hudDetail.textContent = quality.guidanceAdvice || 'Hold device steady until text and details become sharp';
+      if (hudLockPct) hudLockPct.textContent = 'FOCUSING';
+      if (hudIcon) {
+        hudIcon.textContent = 'center_focus_weak';
+        hudIcon.className = 'material-symbols-outlined text-[20px] text-primary';
+      }
+      bracketMarks.forEach(bm => {
+        bm.style.backgroundColor = '#0284c7';
+      });
     } else {
       if (hudBanner) hudBanner.className = 'w-full flex items-center justify-between px-space-md py-space-sm rounded-xl bg-surface-container border border-tertiary/40 transition-colors duration-300';
       if (hudText) {
-        hudText.textContent = quality.retakePrompt || 'ADJUST DOCUMENT POSITION';
+        hudText.textContent = 'POSITION DOCUMENT IN FRAME';
         hudText.className = 'text-xs font-bold text-tertiary uppercase tracking-wide';
       }
-      if (hudDetail) hudDetail.textContent = quality.guidanceAdvice || 'Center passport inside boundary guides';
+      if (hudDetail) hudDetail.textContent = quality.guidanceAdvice || 'Center document inside boundary guides';
       if (hudLockPct) hudLockPct.textContent = 'ADJUST';
       if (hudIcon) {
         hudIcon.textContent = 'warning';
@@ -1162,6 +1303,7 @@ class DocuShieldApp {
   // --- EXECUTE FORENSIC PIPELINE & PROCESSING ---
 
   async triggerCapture() {
+    this.isCapturing = true;
     // Resolve officer-selected document type from capture screen dropdown
     const officerDocType = document.getElementById('capture-doc-type-select')?.value || this.selectedDocType || this.activeSpecimen?.document_type || 'passport';
     this.selectedDocType = officerDocType;
@@ -1225,6 +1367,7 @@ class DocuShieldApp {
       const canvas = document.getElementById('camera-canvas');
       const quality = QualityGate.analyzeImageQuality(canvas);
       if (!quality.passed) {
+        this.isCapturing = false;
         this.showRetakeModal(quality);
         return;
       }
@@ -1273,6 +1416,7 @@ class DocuShieldApp {
       // Offline Specimen or Pre-captured image mode
       if (docDataToScreen.qualityResult && docDataToScreen.qualityResult.passed === false) {
         // Specimen with poor quality (Specimen 6) triggers non-punitive retake loop
+        this.isCapturing = false;
         this.showRetakeModal({
           retakePrompt: 'A3a: Capture Quality Check Required',
           guidanceAdvice: docDataToScreen.qualityResult.failureReason ||
@@ -2728,6 +2872,11 @@ class DocuShieldApp {
     const shutterBtn = document.getElementById('shutter-btn');
     if (shutterBtn) {
       shutterBtn.addEventListener('click', () => this.triggerCapture());
+    }
+
+    const toggleAutoCapBtn = document.getElementById('toggle-autocapture-btn');
+    if (toggleAutoCapBtn) {
+      toggleAutoCapBtn.addEventListener('click', () => this.toggleAutoCapture());
     }
 
     const retakeModalClose = document.getElementById('retake-modal-close');

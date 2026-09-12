@@ -142,10 +142,10 @@ export class QualityGate {
    */
   static analyzeImageQuality(source) {
     let imageData;
-    if (source instanceof HTMLCanvasElement) {
+    if (typeof HTMLCanvasElement !== 'undefined' && source instanceof HTMLCanvasElement) {
       const ctx = source.getContext('2d');
       imageData = ctx.getImageData(0, 0, source.width, source.height);
-    } else if (source instanceof ImageData) {
+    } else if ((typeof ImageData !== 'undefined' && source instanceof ImageData) || (source && typeof source.width === 'number' && typeof source.height === 'number' && source.data)) {
       imageData = source;
     } else {
       throw new Error('Invalid image source for quality analysis');
@@ -247,11 +247,47 @@ export class QualityGate {
     const avgEdgeContrast = borderSampleCount > 0 ? borderEdgeSum / borderSampleCount : 0;
     const framingScore = Math.min(100, Math.round((avgEdgeContrast / 30) * 100));
 
+    // ── 3b. Detail & Text Visibility Check (High-frequency text edge gradient) ──
+    // Check interior document zone (20% to 80% height, 15% to 85% width)
+    const innerYStart = Math.round(height * 0.20);
+    const innerYEnd = Math.round(height * 0.80);
+    const innerXStart = Math.round(width * 0.15);
+    const innerXEnd = Math.round(width * 0.85);
+
+    let textEdgePixels = 0;
+    let interiorSampleCount = 0;
+    let minInnerLum = 255;
+    let maxInnerLum = 0;
+
+    for (let y = innerYStart; y < innerYEnd; y += 2) {
+      const rowOffset = y * width;
+      for (let x = innerXStart; x < innerXEnd; x += 2) {
+        interiorSampleCount++;
+        const lum = grayscale[rowOffset + x];
+        if (lum < minInnerLum) minInnerLum = lum;
+        if (lum > maxInnerLum) maxInnerLum = lum;
+
+        const nextLum = grayscale[rowOffset + x + 1];
+        if (Math.abs(lum - nextLum) > 20) {
+          textEdgePixels++;
+        }
+      }
+    }
+
+    const detailDensityPct = interiorSampleCount > 0 ? (textEdgePixels / interiorSampleCount) * 100 : 0;
+    const innerContrastRange = maxInnerLum - minInnerLum;
+
+    // A document is detected if boundary contrast or text edge density is present
+    const isDocumentDetected = (framingScore >= 35 || detailDensityPct >= 1.5) && innerContrastRange >= 50;
+
     // ── 4. Evaluate against Operational Thresholds ──
     const isSharp = laplacianVariance >= CONFIG.THRESHOLDS.MIN_LAPLACIAN_VAR;
     const isLightingGood = overexposedPct <= CONFIG.THRESHOLDS.MAX_OVEREXPOSURE_PCT &&
                            underexposedPct <= CONFIG.THRESHOLDS.MAX_UNDEREXPOSURE_PCT;
     const isFramed = framingScore >= 45;
+
+    // Details are properly visible when sharp, legible text edge transitions exist, and illumination is balanced
+    const hasDetailsVisible = isSharp && isLightingGood && detailDensityPct >= 1.8;
 
     const checks = {
       blur: {
@@ -279,10 +315,20 @@ export class QualityGate {
         passed: isFramed,
         score: framingScore,
         status: isFramed ? 'ALIGNED' : 'REALIGN EDGES'
+      },
+      details: {
+        passed: hasDetailsVisible,
+        density: Math.round(detailDensityPct * 10) / 10,
+        status: hasDetailsVisible ? 'LEGIBLE (PASSED)' : (detailDensityPct >= 1.8 ? 'BLURRED (HOLD STEADY)' : 'NO DETAILS DETECTED')
+      },
+      documentPresence: {
+        detected: isDocumentDetected,
+        status: isDocumentDetected ? 'DOCUMENT IN FRAME' : 'NO DOCUMENT'
       }
     };
 
     const passedAll = isSharp && isLightingGood && isFramed;
+    const readyForAutoCapture = passedAll && isDocumentDetected && hasDetailsVisible;
 
     let retakePrompt = null;
     let guidanceAdvice = null;
@@ -312,7 +358,11 @@ export class QualityGate {
       laplacianVariance: Math.round(laplacianVariance),
       overexposedPct: Math.round(overexposedPct * 10) / 10,
       underexposedPct: Math.round(underexposedPct * 10) / 10,
-      framingScore
+      framingScore,
+      detailDensityPct: Math.round(detailDensityPct * 10) / 10,
+      hasDocument: isDocumentDetected,
+      detailsVisible: hasDetailsVisible,
+      readyForAutoCapture
     };
   }
 }
