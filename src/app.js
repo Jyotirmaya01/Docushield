@@ -1173,14 +1173,19 @@ class DocuShieldApp {
         title: this.isUploadedDocument ? `Uploaded Document (${this.uploadedFileName || 'File'})` : 'Live Camera Capture',
         document_type: officerDocType,
         isLiveScan: true,
+        lastCapturedCanvas: this.lastCapturedCanvas,
+        canvas: this.lastCapturedCanvas,
         visualFields: {
           documentType: officerDocType
         },
+        extra_fields: {},
         mrzLines: []
       };
     } else {
       docDataToScreen = { ...this.activeSpecimen };
       docDataToScreen.document_type = officerDocType;
+      docDataToScreen.lastCapturedCanvas = this.lastCapturedCanvas;
+      docDataToScreen.canvas = this.lastCapturedCanvas;
       if (!docDataToScreen.visualFields) docDataToScreen.visualFields = {};
       docDataToScreen.visualFields.documentType = officerDocType;
     }
@@ -1190,8 +1195,8 @@ class DocuShieldApp {
       docDataToScreen.mrzLines = [];
     }
 
-    // Attach type-specific extra_fields template if not present
-    if (!docDataToScreen.extra_fields) {
+    // Attach specimen template extra_fields ONLY if in preset specimen mode
+    if (!this.cameraActive && !this.isUploadedDocument && !docDataToScreen.extra_fields) {
       if (officerDocType === 'passport') {
         docDataToScreen.extra_fields = {
           issuing_authority: 'RPO PASSPORT OFFICE',
@@ -1237,6 +1242,8 @@ class DocuShieldApp {
       captureCanvas.height = video.videoHeight || 720;
       captureCanvas.getContext('2d').drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
       this.lastCapturedCanvas = captureCanvas;
+      docDataToScreen.lastCapturedCanvas = captureCanvas;
+      docDataToScreen.canvas = captureCanvas;
 
       // Convert to JPEG blob and save locally in IndexedDB (Step 2)
       try {
@@ -1565,13 +1572,13 @@ class DocuShieldApp {
           const extractedRecord = {
             record_id: this.currentScanId,
             document_type: docType,
-            name: ef.name || result.traveler?.fullName || documentData.visualFields?.fullName || 'UNKNOWN',
-            date_of_birth: ef.date_of_birth || result.traveler?.dateOfBirth || documentData.visualFields?.dateOfBirth,
-            document_number: ef.document_number || result.traveler?.documentNumber || documentData.visualFields?.documentNumber,
-            nationality: ef.nationality || result.traveler?.nationality || documentData.visualFields?.nationality,
-            gender: ef.gender || result.traveler?.sex || documentData.visualFields?.sex,
-            issue_date: ef.issue_date || documentData.issueDate || '2020-01-01',
-            expiry_date: ef.expiry_date || result.traveler?.expiryDate || documentData.visualFields?.expiryDate,
+            name: ef.name || result.traveler?.fullName || documentData.visualFields?.fullName || null,
+            date_of_birth: ef.date_of_birth || result.traveler?.dateOfBirth || documentData.visualFields?.dateOfBirth || null,
+            document_number: ef.document_number || result.traveler?.documentNumber || documentData.visualFields?.documentNumber || null,
+            nationality: ef.nationality || result.traveler?.nationality || documentData.visualFields?.nationality || null,
+            gender: ef.gender || result.traveler?.sex || documentData.visualFields?.sex || null,
+            issue_date: ef.issue_date || documentData.issueDate || null,
+            expiry_date: ef.expiry_date || result.traveler?.expiryDate || documentData.visualFields?.expiryDate || null,
             mrz_raw: rawMrz,
             extra_fields: extraFields
           };
@@ -1655,14 +1662,14 @@ class DocuShieldApp {
     const photoEl = document.getElementById('approved-photo');
     const blockRefEl = document.getElementById('approved-block-ref');
 
-    const t = result.traveler;
-    if (nameEl) nameEl.textContent = t.fullName;
-    if (docNumEl) docNumEl.textContent = t.documentNumber;
-    if (natEl) natEl.textContent = `${t.nationality} (${CONFIG.ICAO_COUNTRIES[t.nationality] || 'ICAO'})`;
-    if (dobEl) dobEl.textContent = t.dateOfBirth;
-    if (expEl) expEl.textContent = t.expiryDate;
-    if (sexEl) sexEl.textContent = t.sex === 'M' ? 'MALE' : (t.sex === 'F' ? 'FEMALE' : t.sex);
-    if (typeEl) typeEl.textContent = t.documentType;
+    const t = result.traveler || {};
+    if (nameEl) nameEl.textContent = t.fullName || '—';
+    if (docNumEl) docNumEl.textContent = t.documentNumber || '—';
+    if (natEl) natEl.textContent = t.nationality ? `${t.nationality} (${CONFIG.ICAO_COUNTRIES[t.nationality] || 'ICAO'})` : '—';
+    if (dobEl) dobEl.textContent = t.dateOfBirth || '—';
+    if (expEl) expEl.textContent = t.expiryDate || '—';
+    if (sexEl) sexEl.textContent = t.sex === 'M' ? 'MALE' : (t.sex === 'F' ? 'FEMALE' : (t.sex || '—'));
+    if (typeEl) typeEl.textContent = t.documentType || '—';
     if (scoreEl) scoreEl.textContent = `${result.riskScore} / 100`;
     if (confEl) confEl.textContent = `${result.confidence}%`;
     if (photoEl && t.photoUrl) photoEl.src = t.photoUrl;
@@ -1724,10 +1731,10 @@ class DocuShieldApp {
     const photoEl = document.getElementById('flagged-photo');
     const listEl = document.getElementById('flagged-anomalies-list');
 
-    const t = result.traveler;
-    if (nameEl) nameEl.textContent = t.fullName;
-    if (docNumEl) docNumEl.textContent = t.documentNumber;
-    if (natEl) natEl.textContent = `${t.nationality} (${CONFIG.ICAO_COUNTRIES[t.nationality] || 'ICAO'})`;
+    const t = result.traveler || {};
+    if (nameEl) nameEl.textContent = t.fullName || '—';
+    if (docNumEl) docNumEl.textContent = t.documentNumber || '—';
+    if (natEl) natEl.textContent = t.nationality ? `${t.nationality} (${CONFIG.ICAO_COUNTRIES[t.nationality] || 'ICAO'})` : '—';
     if (scoreEl) scoreEl.textContent = `${result.riskScore}`;
     if (photoEl && t.photoUrl) photoEl.src = t.photoUrl;
 

@@ -63,11 +63,28 @@ if (ocrRes4.name !== 'SUNIL THAPA' || ocrRes4.document_number !== 'NP-0921448') 
   process.exit(1);
 }
 
-// Case E: Blank / unreadable live scan must NEVER default to Rahul Sharma
+// Case E: Blank / unreadable live scan must NEVER default to Rahul Sharma or fake dates
 const ocrRes5 = OCREngine.extractFieldsByTemplate('', 'passport', {});
-console.log('Real Scan 5 (Blank scan):', { name: ocrRes5.name });
-if (ocrRes5.name.includes('RAHUL') || ocrRes5.name.includes('SHARMA')) {
+console.log('Real Scan 5 (Blank scan):', { name: ocrRes5.name, dob: ocrRes5.date_of_birth, docNum: ocrRes5.document_number, nat: ocrRes5.nationality });
+if (ocrRes5.name && (ocrRes5.name.includes('RAHUL') || ocrRes5.name.includes('SHARMA'))) {
   console.error('FAIL: Blank scan must never default to Rahul Sharma!');
+  process.exit(1);
+}
+if (ocrRes5.date_of_birth !== null && ocrRes5.date_of_birth !== undefined) {
+  console.error('FAIL: Blank scan must have null date_of_birth, not fake default!');
+  process.exit(1);
+}
+if (ocrRes5.document_number !== null && ocrRes5.document_number !== undefined) {
+  console.error('FAIL: Blank scan must have null document_number, not fake default!');
+  process.exit(1);
+}
+
+// Case F: Verify all real fields extracted accurately
+const fullDocText = "PASSPORT\nNAME: AMITA CHEN\nDOCUMENT NO: K9928103\nNATIONALITY: IND\nDATE OF BIRTH: 1991-05-18\nSEX: F\nEXPIRY DATE: 2031-05-17";
+const ocrRes6 = OCREngine.extractFieldsByTemplate(fullDocText, 'passport', {});
+console.log('Real Scan 6 (Full Real Doc):', ocrRes6);
+if (ocrRes6.name !== 'AMITA CHEN' || ocrRes6.document_number !== 'K9928103' || ocrRes6.nationality !== 'IND' || ocrRes6.date_of_birth !== '1991-05-18' || ocrRes6.gender !== 'F' || ocrRes6.expiry_date !== '2031-05-17') {
+  console.error('FAIL: Real Scan 6 should extract 100% real document data!');
   process.exit(1);
 }
 

@@ -173,13 +173,37 @@ export class ForensicEngine {
     }
 
     // Combine traveler info (Generic across passport, national_id, and visa)
+    const resolvedFullName = (hasMrz && mrzResult.fullName && mrzResult.fullName !== 'UNKNOWN')
+      ? mrzResult.fullName
+      : (ocrFields.fullName || documentData.visualFields?.fullName || null);
+
+    const resolvedDocNumber = (hasMrz && mrzResult.documentNumber)
+      ? mrzResult.documentNumber
+      : (ocrFields.documentNumber || documentData.visualFields?.documentNumber || null);
+
+    const resolvedNationality = (hasMrz && mrzResult.nationality)
+      ? mrzResult.nationality
+      : (ocrFields.nationality || documentData.visualFields?.nationality || null);
+
+    const resolvedDob = (hasMrz && mrzResult.dateOfBirth)
+      ? mrzResult.dateOfBirth
+      : (ocrFields.dateOfBirth || documentData.visualFields?.dateOfBirth || null);
+
+    const resolvedExpiry = (hasMrz && mrzResult.expiryDate)
+      ? mrzResult.expiryDate
+      : (ocrFields.expiryDate || documentData.visualFields?.expiryDate || null);
+
+    const resolvedSex = (hasMrz && mrzResult.sex)
+      ? mrzResult.sex
+      : (ocrFields.sex || documentData.visualFields?.sex || null);
+
     results.traveler = {
-      fullName: (hasMrz && mrzResult.fullName) ? mrzResult.fullName : (ocrFields.fullName || 'UNKNOWN TRAVELER'),
-      documentNumber: (hasMrz && mrzResult.documentNumber) ? mrzResult.documentNumber : (ocrFields.documentNumber || 'UNK-9942'),
-      nationality: (hasMrz && mrzResult.nationality) ? mrzResult.nationality : (ocrFields.nationality || 'IND'),
-      dateOfBirth: (hasMrz && mrzResult.dateOfBirth) ? mrzResult.dateOfBirth : (ocrFields.dateOfBirth || '1990-01-01'),
-      expiryDate: (hasMrz && mrzResult.expiryDate) ? mrzResult.expiryDate : (ocrFields.expiryDate || '2030-01-01'),
-      sex: (hasMrz && mrzResult.sex) ? mrzResult.sex : (ocrFields.sex || 'M'),
+      fullName: resolvedFullName || 'UNIDENTIFIED BEARER',
+      documentNumber: resolvedDocNumber,
+      nationality: resolvedNationality,
+      dateOfBirth: resolvedDob,
+      expiryDate: resolvedExpiry,
+      sex: resolvedSex,
       documentType: documentType,
       extraFields: extraFields,
       photoUrl: documentData.photoUrl || null
@@ -235,36 +259,41 @@ export class ForensicEngine {
     notify(5, 'Chronology & Anomaly Logic', 'RUNNING', 'Validating age boundaries, issue vs expiry chronology, and ISO country codes...');
     await delay(350);
     const logicErrors = [];
-    const dobDate = new Date(results.traveler.dateOfBirth);
-    const expiryDate = new Date(results.traveler.expiryDate);
-    const issueDate = documentData.issueDate ? new Date(documentData.issueDate) : null;
+    const dobDate = results.traveler.dateOfBirth ? new Date(results.traveler.dateOfBirth) : null;
+    const expiryDate = results.traveler.expiryDate ? new Date(results.traveler.expiryDate) : null;
+    const rawIssue = results.traveler.issueDate || results.extractedFields?.issue_date || documentData.issueDate;
+    const issueDate = rawIssue ? new Date(rawIssue) : null;
     const now = new Date();
 
     // 1. DOB in future check
-    if (!isNaN(dobDate.getTime()) && dobDate > now) {
+    if (dobDate && !isNaN(dobDate.getTime()) && dobDate > now) {
       logicErrors.push(`Chronological impossibility: Date of birth (${results.traveler.dateOfBirth}) is in the future`);
     }
 
     // 2. Age validation
-    const ageYears = (now - dobDate) / (1000 * 60 * 60 * 24 * 365.25);
-    if (isNaN(ageYears) || ageYears < 0 || ageYears > 120) {
-      logicErrors.push(`Plausible age check failed: calculated age is ${Math.round(ageYears)} years (acceptable: 0-120)`);
+    if (dobDate && !isNaN(dobDate.getTime())) {
+      const ageYears = (now - dobDate) / (1000 * 60 * 60 * 24 * 365.25);
+      if (isNaN(ageYears) || ageYears < 0 || ageYears > 120) {
+        logicErrors.push(`Plausible age check failed: calculated age is ${Math.round(ageYears)} years (acceptable: 0-120)`);
+      }
     }
 
     // 3. Expiry chronology: expiry date must be strictly after issue date
-    if (issueDate && !isNaN(issueDate.getTime()) && !isNaN(expiryDate.getTime())) {
+    if (issueDate && !isNaN(issueDate.getTime()) && expiryDate && !isNaN(expiryDate.getTime())) {
       if (expiryDate <= issueDate) {
-        logicErrors.push(`Chronological anomaly: Expiry date (${results.traveler.expiryDate}) precedes or matches issue date (${documentData.issueDate})`);
+        logicErrors.push(`Chronological anomaly: Expiry date (${results.traveler.expiryDate}) precedes or matches issue date (${rawIssue})`);
       }
       if (issueDate > now) {
-        logicErrors.push(`Chronological impossibility: Document issue date (${documentData.issueDate}) is in the future`);
+        logicErrors.push(`Chronological impossibility: Document issue date (${rawIssue}) is in the future`);
       }
     }
 
     // 4. Nationality ISO check
-    const isValidCountry = !!CONFIG.ICAO_COUNTRIES[results.traveler.nationality];
-    if (!isValidCountry) {
-      logicErrors.push(`Unrecognized ISO 3166-1 alpha-3 issuing state code: "${results.traveler.nationality}"`);
+    if (results.traveler.nationality) {
+      const isValidCountry = !!CONFIG.ICAO_COUNTRIES[results.traveler.nationality];
+      if (!isValidCountry) {
+        logicErrors.push(`Unrecognized ISO 3166-1 alpha-3 issuing state code: "${results.traveler.nationality}"`);
+      }
     }
 
     const logicPassed = logicErrors.length === 0;
