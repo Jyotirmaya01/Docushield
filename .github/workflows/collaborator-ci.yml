@@ -23,7 +23,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Validate Python Scripts
         run: |
@@ -39,6 +39,7 @@ jobs:
           echo "Checking JSON schema and formatting..."
           python -c "import json; json.load(open('manifest.json'))"
           python -c "import json; json.load(open('vercel.json'))"
+          python -c "import json; json.load(open('package.json'))"
           echo "JSON files are valid!"
 
       - name: Validate JavaScript Syntax
@@ -48,6 +49,8 @@ jobs:
           node -c test_verify.js
           node -c src/app.js
           node -c src/auth/authManager.js
+          echo "Running unit verification..."
+          node test_verify.js
           echo "All core JavaScript modules passed syntax verification!"
 
       - name: Verify Web Shell Files

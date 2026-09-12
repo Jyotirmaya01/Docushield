@@ -37,6 +37,7 @@ desktop.ini
 
 # Debug & Test Artifacts
 test_*.js
+!test_verify.js
 *.map
 
 # Documentation artifacts (non-project)

@@ -1,0 +1,11 @@
+{
+  "name": "docushield",
+  "version": "1.0.0",
+  "description": "DocuShield - Offline AI Border Document Screening System",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node test_verify.js",
+    "check": "node --check sw.js && node --check test_verify.js && node --check src/app.js && node --check src/auth/authManager.js"
+  }
+}
