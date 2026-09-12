@@ -7,7 +7,7 @@
 // 1. Load Local Workbox Service Worker Bundle (Zero external network dependencies)
 importScripts('./assets/vendor/workbox-sw.js');
 
-const CACHE_VERSION = 'v6-workbox';
+const CACHE_VERSION = 'v8-verified';
 const CACHE_NAME = `docushield-${CACHE_VERSION}`;
 
 // Complete App Shell & Offline Assets Manifest (HTML, CSS, JS, Vendor, Models, Icons)
@@ -240,8 +240,9 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Universal Offline-First Fetch Fallback Handler
-self.addEventListener('fetch', (event) => {
+// Universal Offline-First Fetch Fallback Handler (active if Workbox is not available)
+if (!self.workbox) {
+  self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   // If Workbox already handled the route, let it manage; otherwise fallback to Cache-First
@@ -317,4 +318,6 @@ self.addEventListener('fetch', (event) => {
       });
     })
   );
-});
+  });
+}
+

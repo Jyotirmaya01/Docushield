@@ -311,12 +311,12 @@ export class ForensicEngine {
 
     // Step 5 Aggregation: Validate status calculation (Zero hard-reject policy)
     const mrzPassed = results.stages.mrz?.passed !== false;
-    const consistencyPassed = results.stages.consistency?.passed !== false;
+    const fieldFormatPassed = results.stages.consistency?.passed !== false;
     const dateLogicPassed = results.stages.logic?.passed !== false;
     const photoPassed = results.stages.photoValidation?.passed !== false;
 
     // Core validation rule: document passes Step 5 validation if MRZ, field format, and date logic all pass
-    const validationPassed = mrzPassed && consistencyPassed && dateLogicPassed;
+    const validationPassed = mrzPassed && fieldFormatPassed && dateLogicPassed;
     const validationFailureReasons = results.anomalies
       .filter(a => ['MRZ Checksum', 'MRZ Composite Checksum', 'Field Consistency', 'Chronology Logic', 'Photo Specification'].includes(a.module))
       .map(a => `${a.module}: ${a.description}`);
@@ -327,7 +327,7 @@ export class ForensicEngine {
       record_id: documentData.record_id || null,
       validation_passed: validationPassed,
       mrz_checksum_passed: mrzPassed,
-      field_format_passed: consistencyPassed,
+      field_format_passed: fieldFormatPassed,
       date_logic_passed: dateLogicPassed,
       photo_validation_passed: photoPassed,
       failure_reasons: validationFailureReasons

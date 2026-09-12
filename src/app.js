@@ -2419,6 +2419,7 @@ class DocuShieldApp {
     const officerLoginBtn = document.getElementById('btn-officer-login');
 
     officerForm?.addEventListener('submit', (e) => this.submitOfficerLogin(e));
+    officerLoginBtn?.addEventListener('click', (e) => this.submitOfficerLogin(e));
 
     // --- ONE-CLICK DEMO ACCESS BUTTON ---
     const demoBtn = document.getElementById('btn-quick-demo');
@@ -2426,7 +2427,9 @@ class DocuShieldApp {
 
     // --- SECTOR COMMAND ADMIN LOGIN ---
     const adminForm = document.getElementById('admin-login-form');
+    const adminLoginBtn = document.getElementById('btn-admin-login');
     adminForm?.addEventListener('submit', (e) => this.submitAdminLogin(e));
+    adminLoginBtn?.addEventListener('click', (e) => this.submitAdminLogin(e));
 
     // --- ADMIN TO TERMINAL NAVIGATION ---
     document.getElementById('admin-to-terminal-btn')?.addEventListener('click', () => this.navigateTo('dashboard'));

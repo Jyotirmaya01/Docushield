@@ -222,7 +222,7 @@
           </div>
 
           <!-- Authenticate Button -->
-          <button type="submit" id="btn-officer-login" class="w-full h-12 rounded-xl bg-primary text-on-primary font-bold text-xs uppercase tracking-wide hover:bg-primary-container active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg mt-1">
+          <button type="submit" id="btn-officer-login" onclick="window.app ? window.app.submitOfficerLogin(event) : false;" class="w-full h-12 rounded-xl bg-primary text-on-primary font-bold text-xs uppercase tracking-wide hover:bg-primary-container active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg mt-1">
             <span>Sign In to Inspection Console</span>
             <span class="material-symbols-outlined text-[18px]">login</span>
           </button>
@@ -311,7 +311,7 @@
             <span id="admin-login-error-text" class="flex-1">Admin authentication failed.</span>
           </div>
 
-          <button type="submit" id="btn-admin-login" class="w-full h-12 rounded-xl bg-tertiary text-on-tertiary font-bold text-xs uppercase tracking-wide hover:bg-tertiary-container active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg mt-1">
+          <button type="submit" id="btn-admin-login" onclick="window.app ? window.app.submitAdminLogin(event) : false;" class="w-full h-12 rounded-xl bg-tertiary text-on-tertiary font-bold text-xs uppercase tracking-wide hover:bg-tertiary-container active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg mt-1">
             <span>Sign In to Admin Console</span>
             <span class="material-symbols-outlined text-[18px]">admin_panel_settings</span>
           </button>
