@@ -285,3 +285,7 @@ export const SAMPLE_SPECIMENS = [
     }
   }
 ];
+
+if (typeof window !== 'undefined') {
+  window.SAMPLE_SPECIMENS = SAMPLE_SPECIMENS;
+}

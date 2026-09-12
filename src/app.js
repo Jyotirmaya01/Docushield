@@ -751,6 +751,9 @@ class DocuShieldApp {
         const found = SAMPLE_SPECIMENS.find(s => s.id === btn.dataset.id);
         if (found) {
           this.activeSpecimen = found;
+          this.isUploadedDocument = false;
+          this.lastCapturedCanvas = null;
+          this.currentScanId = null;
           this.selectedDocType = found.document_type || 'passport';
           const docTypeSelect = document.getElementById('capture-doc-type-select');
           if (docTypeSelect) {
@@ -801,7 +804,7 @@ class DocuShieldApp {
       if (specLabel) specLabel.textContent = 'ICAO 9303';
       if (zoneTitle) zoneTitle.textContent = 'Machine-Readable Zone (MRZ)';
       if (zoneSubtitle) zoneSubtitle.textContent = 'Checksum Target';
-      if (zoneSample) zoneSample.textContent = 'P<INDSHARMA<<RAHUL<<<<<<<<<<<<<<<<<<<<<<<<<<';
+      if (zoneSample) zoneSample.textContent = 'P<UTO<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<';
       if (hudDetail) hudDetail.textContent = 'Hold passport steady inside the alignment frame';
     }
   }
@@ -852,6 +855,9 @@ class DocuShieldApp {
           'scan-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         this.currentScanId = recordId;
         this.lastCapturedCanvas = canvas;
+        this.isUploadedDocument = true;
+        this.uploadedFileName = file.name;
+        this.uploadQuality = quality;
 
         try {
           const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
@@ -949,13 +955,14 @@ class DocuShieldApp {
       imgSrc = this.activeSpecimen?.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600';
     }
 
-    // Extract fields via template parser
+    // Extract fields via template parser (specimen data only used if in preset specimen mode)
     const rawText = OCREngine.lastRawText || '';
-    const extracted = OCREngine.extractFieldsByTemplate(rawText, officerDocType, {
+    const specimenData = (this.cameraActive || this.isUploadedDocument) ? {} : {
       ...this.activeSpecimen?.visualFields,
       mrzLines: this.activeSpecimen?.mrzLines,
       extra_fields: this.activeSpecimen?.extra_fields
-    });
+    };
+    const extracted = OCREngine.extractFieldsByTemplate(rawText, officerDocType, specimenData);
 
     const recordId = this.currentScanId || ('scan-' + Date.now().toString(36));
     const record = {
@@ -1155,14 +1162,28 @@ class DocuShieldApp {
   // --- EXECUTE FORENSIC PIPELINE & PROCESSING ---
 
   async triggerCapture() {
-    let docDataToScreen = { ...this.activeSpecimen };
-
     // Resolve officer-selected document type from capture screen dropdown
-    const officerDocType = document.getElementById('capture-doc-type-select')?.value || this.selectedDocType || docDataToScreen.document_type || 'passport';
+    const officerDocType = document.getElementById('capture-doc-type-select')?.value || this.selectedDocType || this.activeSpecimen?.document_type || 'passport';
     this.selectedDocType = officerDocType;
-    docDataToScreen.document_type = officerDocType;
-    if (!docDataToScreen.visualFields) docDataToScreen.visualFields = {};
-    docDataToScreen.visualFields.documentType = officerDocType;
+
+    let docDataToScreen;
+    if (this.cameraActive || this.isUploadedDocument) {
+      docDataToScreen = {
+        id: this.currentScanId || ('scan-' + Date.now()),
+        title: this.isUploadedDocument ? `Uploaded Document (${this.uploadedFileName || 'File'})` : 'Live Camera Capture',
+        document_type: officerDocType,
+        isLiveScan: true,
+        visualFields: {
+          documentType: officerDocType
+        },
+        mrzLines: []
+      };
+    } else {
+      docDataToScreen = { ...this.activeSpecimen };
+      docDataToScreen.document_type = officerDocType;
+      if (!docDataToScreen.visualFields) docDataToScreen.visualFields = {};
+      docDataToScreen.visualFields.documentType = officerDocType;
+    }
 
     // For non-MRZ documents (e.g. Visa), clear MRZ expectations so pipeline skips MRZ check cleanly
     if (officerDocType === 'visa') {
@@ -1173,8 +1194,8 @@ class DocuShieldApp {
     if (!docDataToScreen.extra_fields) {
       if (officerDocType === 'passport') {
         docDataToScreen.extra_fields = {
-          issuing_authority: 'RPO DELHI',
-          place_of_birth: 'NEW DELHI',
+          issuing_authority: 'RPO PASSPORT OFFICE',
+          place_of_birth: 'CAPITAL DISTRICT',
           passport_type: 'REGULAR'
         };
       } else if (officerDocType === 'national_id') {
@@ -1186,8 +1207,8 @@ class DocuShieldApp {
       } else if (officerDocType === 'visa') {
         docDataToScreen.extra_fields = {
           visa_type: 'TOURIST',
-          linked_passport_number: 'GBR-8830192',
-          sponsor_name: 'MINISTRY OF EXTERNAL AFFAIRS',
+          linked_passport_number: '',
+          sponsor_name: '',
           number_of_entries_allowed: 'MULTIPLE',
           issuing_country: 'IND'
         };
@@ -1301,7 +1322,7 @@ class DocuShieldApp {
 
     // Step A2: Ledger Lookup (Check document history in cryptographic ledger)
     const docNumber = docDataToScreen.visualFields?.documentNumber;
-    const routing = await LedgerRouter.evaluatePathway(docNumber);
+    const routing = docNumber ? await LedgerRouter.evaluatePathway(docNumber) : { pathway: 'FULL_PIPELINE' };
 
     // Branch 1: Found, approved with clean history -> Column C Fast Lane
     if (routing.pathway === 'FAST_LANE') {
